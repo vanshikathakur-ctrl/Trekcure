@@ -98,7 +98,9 @@ class OfflineSosScreen extends StatelessWidget {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const SosActivatedScreen())),
+                    MaterialPageRoute(builder: (_) => const SosActivatedScreen(
+                      sosId : 'offline-demo'
+                    ))),
                 style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.dangerRed),
                 child: const Text('Send Offline SOS'),
