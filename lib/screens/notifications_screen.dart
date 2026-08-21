@@ -25,36 +25,44 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _listenForSos() {
-    _channel = _supabase
-        .channel('sos-alerts')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'sos_alerts',
-          callback: (payload) {
-            debugPrint(
-              'SOS REALTIME EVENT RECEIVED: ${payload.newRecord}',
-            );
+  debugPrint('STARTING SOS REALTIME LISTENER...');
 
-            final newSos = payload.newRecord;
+  _channel = _supabase
+      .channel('sos-alerts-${DateTime.now().millisecondsSinceEpoch}')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'sos_alerts',
+        callback: (payload) {
+          debugPrint(
+            'SOS REALTIME EVENT RECEIVED: ${payload.newRecord}',
+          );
 
-            if (!mounted) return;
+          final newSos = payload.newRecord;
 
-            setState(() {
-              _sosNotifications.insert(0, {
-                'id': newSos['id'],
-                'title': 'SOS Emergency Alert',
-                'subtitle':
-                    'A tourist has triggered an emergency SOS alert in Mumbai.',
-                'time': 'Just now',
-              });
+          if (!mounted) return;
+
+          setState(() {
+            _sosNotifications.insert(0, {
+              'id': newSos['id'],
+              'title': 'SOS Emergency Alert',
+              'subtitle':
+                  'A tourist has triggered an emergency SOS alert in Mumbai.',
+              'time': 'Just now',
             });
+          });
 
-            _showSosDialog();
-          },
-        )
-        .subscribe();
-  }
+          _showSosDialog();
+        },
+      )
+      .subscribe((status, error) {
+        debugPrint('SOS REALTIME STATUS: $status');
+
+        if (error != null) {
+          debugPrint('SOS REALTIME ERROR: $error');
+        }
+      });
+}
 
   void _showSosDialog() {
     showDialog(

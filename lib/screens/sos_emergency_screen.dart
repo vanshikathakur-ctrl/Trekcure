@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
 import 'sos_activated_screen.dart';
+import 'offline_sos_screen.dart';
 
 class SosEmergencyScreen extends StatefulWidget {
   const SosEmergencyScreen({super.key});
@@ -258,6 +259,24 @@ debugPrint('INSERTING SOS INTO SUPABASE...');
               ],
             ),
             const SizedBox(height: 20),
+
+SizedBox(
+  width: double.infinity,
+  child: OutlinedButton.icon(
+    onPressed: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const OfflineSosScreen(),
+        ),
+      );
+    },
+    icon: const Icon(Icons.wifi_off),
+    label: const Text('Offline SOS'),
+  ),
+),
+
+const SizedBox(height: 12),
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
