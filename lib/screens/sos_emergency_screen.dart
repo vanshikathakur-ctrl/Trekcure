@@ -1,5 +1,8 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
 import 'sos_activated_screen.dart';
@@ -14,24 +17,126 @@ class SosEmergencyScreen extends StatefulWidget {
 class _SosEmergencyScreenState extends State<SosEmergencyScreen> {
   Timer? _holdTimer;
   double _progress = 0;
+  bool _isSendingSos = false;
+
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   void _startHold() {
+    if (_isSendingSos) return;
+
     _holdTimer?.cancel();
-    _progress = 0;
-    _holdTimer = Timer.periodic(const Duration(milliseconds: 100), (t) {
-      setState(() => _progress += 0.1 / 3); // 3 seconds total
-      if (_progress >= 1) {
-        t.cancel();
-        Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const SosActivatedScreen()));
-      }
+
+    setState(() {
+      _progress = 0;
     });
+
+    _holdTimer = Timer.periodic(
+      const Duration(milliseconds: 100),
+      (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+
+        setState(() {
+          _progress += 0.1 / 3;
+        });
+
+        if (_progress >= 1) {
+          timer.cancel();
+
+          setState(() {
+            _progress = 1;
+          });
+
+          _triggerSos();
+        }
+      },
+    );
   }
 
   void _cancelHold() {
+    if (_isSendingSos) return;
+
     _holdTimer?.cancel();
-    setState(() => _progress = 0);
+
+    setState(() {
+      _progress = 0;
+    });
   }
+
+ Future<void> _triggerSos() async {
+  if (_isSendingSos) return;
+
+  setState(() {
+    _isSendingSos = true;
+  });
+
+  try {
+    final user = _supabase.auth.currentUser;
+
+    debugPrint('CURRENT USER: ${user?.id}');
+
+if (user == null) {
+  throw Exception('You must be logged in to trigger an SOS.');
+}
+
+// Make sure this user has a profile before creating an SOS.
+await _supabase.from('profiles').upsert({
+  'id': user.id,
+  'full_name': user.userMetadata?['full_name'] ?? 'Prototype User',
+});
+
+debugPrint('PROFILE VERIFIED');
+debugPrint('INSERTING SOS INTO SUPABASE...');
+    final response = await _supabase
+        .from('sos_alerts')
+        .insert({
+          'user_id': user.id,
+          'location': 'POINT(72.8777 19.0760)',
+          'status': 'active',
+        })
+        .select()
+        .single();
+
+    debugPrint('SOS RESPONSE: $response');
+
+    final sosId = response['id'] as String;
+
+    debugPrint('SOS CREATED SUCCESSFULLY');
+    debugPrint('SOS ID: $sosId');
+
+    if (!mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SosActivatedScreen(
+          sosId: sosId,
+        ),
+      ),
+    );
+  } catch (e, stackTrace) {
+    debugPrint('SOS ERROR: $e');
+    debugPrint('STACK TRACE: $stackTrace');
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Failed to activate SOS: $e'),
+        backgroundColor: AppColors.dangerRed,
+      ),
+    );
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isSendingSos = false;
+        _progress = 0;
+      });
+    }
+  }
+}
 
   @override
   void dispose() {
@@ -44,8 +149,13 @@ class _SosEmergencyScreenState extends State<SosEmergencyScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('SOS Emergency',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        title: const Text(
+          'SOS Emergency',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
         actions: const [
           Padding(
             padding: EdgeInsets.only(right: 16),
@@ -85,33 +195,66 @@ class _SosEmergencyScreenState extends State<SosEmergencyScreen> {
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
-                      child: const Text('SOS',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold)),
+                      child: _isSendingSos
+                          ? const SizedBox(
+                              width: 30,
+                              height: 30,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 3,
+                              ),
+                            )
+                          : const Text(
+                              'SOS',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Press and hold for 3 seconds',
-                style: TextStyle(color: AppColors.textGrey)),
+            Text(
+              _isSendingSos
+                  ? 'Sending emergency alert...'
+                  : 'Press and hold for 3 seconds',
+              style: const TextStyle(
+                color: AppColors.textGrey,
+              ),
+            ),
             const SizedBox(height: 28),
             Row(
               children: [
                 Expanded(
-                    child: _statusChip(Icons.location_on, 'Location', 'ON',
-                        AppColors.primaryGreen)),
+                  child: _statusChip(
+                    Icons.location_on,
+                    'Location',
+                    'Mumbai',
+                    AppColors.primaryGreen,
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
-                    child: _statusChip(Icons.wifi_off, 'Connection',
-                        'Offline', AppColors.dangerRed)),
+                  child: _statusChip(
+                    Icons.wifi,
+                    'Connection',
+                    'Online',
+                    AppColors.primaryGreen,
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
-                    child: _statusChip(
-                        Icons.battery_std, 'Battery', '76%', AppColors.primaryGreen)),
+                  child: _statusChip(
+                    Icons.battery_std,
+                    'Battery',
+                    '76%',
+                    AppColors.primaryGreen,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 20),
@@ -122,16 +265,30 @@ class _SosEmergencyScreenState extends State<SosEmergencyScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Emergency Contacts',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Text(
+                        'Emergency Contacts',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       TextButton(
-                          onPressed: () {},
-                          child: const Text('Manage',
-                              style: TextStyle(color: AppColors.primaryGreen))),
+                        onPressed: () {},
+                        child: const Text(
+                          'Manage',
+                          style: TextStyle(
+                            color: AppColors.primaryGreen,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
-                  const Text('2 contacts will be notified',
-                      style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
+                  const Text(
+                    '2 contacts will be notified',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textGrey,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -150,18 +307,41 @@ class _SosEmergencyScreenState extends State<SosEmergencyScreen> {
     );
   }
 
-  Widget _statusChip(IconData icon, String label, String value, Color color) {
+  Widget _statusChip(
+    IconData icon,
+    String label,
+    String value,
+    Color color,
+  ) {
     return AppCard(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      padding: const EdgeInsets.symmetric(
+        vertical: 12,
+        horizontal: 8,
+      ),
       child: Column(
         children: [
-          Icon(icon, size: 16, color: AppColors.textGrey),
+          Icon(
+            icon,
+            size: 16,
+            color: AppColors.textGrey,
+          ),
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textGrey)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 10,
+              color: AppColors.textGrey,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
         ],
       ),
     );
@@ -171,7 +351,10 @@ class _SosEmergencyScreenState extends State<SosEmergencyScreen> {
     return CircleAvatar(
       radius: 18,
       backgroundColor: bg,
-      child: Icon(icon, color: Colors.white),
+      child: Icon(
+        icon,
+        color: Colors.white,
+      ),
     );
   }
 }
