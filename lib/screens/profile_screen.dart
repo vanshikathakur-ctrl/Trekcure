@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
 import 'digital_id_screen.dart';
+import 'emergency_contacts_screen.dart';
 import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -154,14 +155,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             padding: EdgeInsets.zero,
             child: Column(
               children: [
+                // PERSONAL INFORMATION
                 _tile(Icons.badge_outlined, 'Personal Information', () {}),
 
-                _tile(
-                  Icons.contact_phone_outlined,
-                  'Emergency Contacts',
-                  () {},
-                ),
+                // EMERGENCY CONTACTS
+                _tile(Icons.contact_phone_outlined, 'Emergency Contacts', () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const EmergencyContactsScreen(),
+                    ),
+                  );
+                }),
 
+                // DIGITAL TRAVEL ID
                 _tile(Icons.qr_code, 'Digital Travel ID', () {
                   Navigator.push(
                     context,
@@ -169,10 +176,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   );
                 }),
 
+                // NOTIFICATION SETTINGS
                 _tile(Icons.notifications_none, 'Notification Settings', () {}),
 
+                // PRIVACY & SECURITY
                 _tile(Icons.privacy_tip_outlined, 'Privacy & Security', () {}),
 
+                // APP SETTINGS
                 _tile(Icons.settings_outlined, 'App Settings', () {}),
               ],
             ),
@@ -210,6 +220,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       bottomNavigationBar: const AppBottomNav(currentIndex: 4),
     );
   }
+
+  // ============================================================
+  // PROFILE TILE
+  // ============================================================
 
   Widget _tile(IconData icon, String title, VoidCallback onTap) {
     return ListTile(
