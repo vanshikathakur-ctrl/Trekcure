@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/mesh_service.dart';
 import '../theme/app_theme.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -16,55 +19,105 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   RealtimeChannel? _channel;
 
+  StreamSubscription<Map<String, dynamic>>? _offlineSosSubscription;
+
   final List<Map<String, dynamic>> _sosNotifications = [];
 
   @override
   void initState() {
     super.initState();
+
+    // Online SOS via Supabase
     _listenForSos();
+
+    // Offline SOS via Bluetooth mesh
+    _listenForOfflineSos();
   }
 
+  // ============================================================
+  // ONLINE SOS LISTENER - SUPABASE REALTIME
+  // ============================================================
+
   void _listenForSos() {
-  debugPrint('STARTING SOS REALTIME LISTENER...');
+    debugPrint('STARTING SOS REALTIME LISTENER...');
 
-  _channel = _supabase
-      .channel('sos-alerts-${DateTime.now().millisecondsSinceEpoch}')
-      .onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'sos_alerts',
-        callback: (payload) {
-          debugPrint(
-            'SOS REALTIME EVENT RECEIVED: ${payload.newRecord}',
-          );
+    _channel = _supabase
+        .channel('sos-alerts-${DateTime.now().millisecondsSinceEpoch}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'sos_alerts',
+          callback: (payload) {
+            debugPrint(
+              'SOS REALTIME EVENT RECEIVED: ${payload.newRecord}',
+            );
 
-          final newSos = payload.newRecord;
+            final newSos = payload.newRecord;
 
-          if (!mounted) return;
+            if (!mounted) return;
 
-          setState(() {
-            _sosNotifications.insert(0, {
-              'id': newSos['id'],
-              'title': 'SOS Emergency Alert',
-              'subtitle':
-                  'A tourist has triggered an emergency SOS alert in Mumbai.',
-              'time': 'Just now',
+            setState(() {
+              _sosNotifications.insert(0, {
+                'id': newSos['id'],
+                'title': 'SOS Emergency Alert',
+                'subtitle':
+                    'A tourist has triggered an emergency SOS alert in Mumbai.',
+                'time': 'Just now',
+              });
             });
-          });
 
-          _showSosDialog();
-        },
-      )
-      .subscribe((status, error) {
-        debugPrint('SOS REALTIME STATUS: $status');
+            _showSosDialog();
+          },
+        )
+        .subscribe((status, error) {
+          debugPrint('SOS REALTIME STATUS: $status');
 
-        if (error != null) {
-          debugPrint('SOS REALTIME ERROR: $error');
-        }
+          if (error != null) {
+            debugPrint('SOS REALTIME ERROR: $error');
+          }
+        });
+  }
+
+  // ============================================================
+  // OFFLINE SOS LISTENER - BLUETOOTH MESH
+  // ============================================================
+
+  void _listenForOfflineSos() {
+    debugPrint('STARTING OFFLINE MESH SOS LISTENER...');
+
+    _offlineSosSubscription =
+        MeshService.instance.sosStream.listen((sos) {
+      debugPrint('==============================');
+      debugPrint('OFFLINE SOS RECEIVED IN UI');
+      debugPrint('Sender: ${sos['senderName']}');
+      debugPrint('Payload: ${sos['payload']}');
+      debugPrint('==============================');
+
+      if (!mounted) return;
+
+      final senderName = sos['senderName']?.toString() ?? 'Nearby user';
+
+      setState(() {
+        _sosNotifications.insert(0, {
+          'id': DateTime.now().millisecondsSinceEpoch.toString(),
+          'title': 'Offline SOS Emergency',
+          'subtitle':
+              '$senderName has triggered an emergency SOS nearby.',
+          'time': 'Just now',
+        });
       });
-}
+
+      _showOfflineSosDialog(senderName);
+    });
+  }
+
+  // ============================================================
+  // ONLINE SOS DIALOG
+  // ============================================================
 
   void _showSosDialog() {
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder: (context) {
@@ -106,14 +159,73 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
+  // ============================================================
+  // OFFLINE SOS DIALOG
+  // ============================================================
+
+  void _showOfflineSosDialog(String senderName) {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(
+                Icons.emergency,
+                color: AppColors.dangerRed,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'OFFLINE SOS ALERT!',
+                  style: TextStyle(
+                    color: AppColors.dangerRed,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            '$senderName has triggered an emergency SOS nearby through the offline mesh network.',
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.dangerRed,
+              ),
+              child: const Text('Dismiss'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // CLEANUP
+  // ============================================================
+
   @override
   void dispose() {
+    _offlineSosSubscription?.cancel();
+
     if (_channel != null) {
       _supabase.removeChannel(_channel!);
     }
 
     super.dispose();
   }
+
+  // ============================================================
+  // UI
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +253,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
           const SizedBox(height: 10),
 
-          // LIVE SOS NOTIFICATIONS
+          // LIVE ONLINE + OFFLINE SOS NOTIFICATIONS
           ..._sosNotifications.map(
             (notification) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
