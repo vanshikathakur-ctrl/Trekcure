@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../services/fcm_service.dart';
 import '../theme/app_theme.dart';
 import 'home_dashboard_screen.dart';
@@ -14,6 +15,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _idController = TextEditingController();
+
   final TextEditingController _passwordController = TextEditingController();
 
   bool _obscurePassword = true;
@@ -61,8 +63,13 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       debugPrint('LOGIN SUCCESS: ${response.user!.id}');
-      debugPrint('About to call FCM ');
-      //Initialize FCM
+
+      debugPrint('About to call FCM');
+
+      // ========================================================
+      // FCM - UNCHANGED
+      // ========================================================
+
       await initializeFcm();
 
       debugPrint('FCM call finished');
@@ -129,6 +136,9 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const SizedBox(height: 20),
 
+              // ==================================================
+              // TREKCURE LOGO
+              // ==================================================
               RichText(
                 text: const TextSpan(
                   style: TextStyle(
@@ -148,6 +158,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 24),
 
+              // ==================================================
+              // WELCOME
+              // ==================================================
               const Text(
                 'Welcome Back!',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -162,24 +175,53 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 32),
 
-              Container(
-                height: 160,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFB8D8E8), Color(0xFF8FBFA8)],
+              // ==================================================
+              // LOGIN TRAVEL IMAGE
+              // ==================================================
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 160,
+                  child: Image.asset(
+                    'asset/images/login_travel.jpeg',
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+
+                    // Shows an obvious message if Flutter
+                    // cannot load the image.
+                    errorBuilder: (context, error, stackTrace) {
+                      debugPrint('LOGIN IMAGE ERROR: $error');
+
+                      return Container(
+                        color: Colors.grey.shade300,
+                        alignment: Alignment.center,
+                        child: const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.image_not_supported_outlined,
+                              size: 40,
+                              color: Colors.grey,
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Image could not be loaded',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Icon(
-                  Icons.hiking_rounded,
-                  color: Colors.white,
-                  size: 56,
                 ),
               ),
 
               const SizedBox(height: 28),
 
+              // ==================================================
+              // EMAIL / MOBILE
+              // ==================================================
               TextField(
                 controller: _idController,
                 keyboardType: TextInputType.emailAddress,
@@ -192,6 +234,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 14),
 
+              // ==================================================
+              // PASSWORD
+              // ==================================================
               TextField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
@@ -213,6 +258,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
+              // ==================================================
+              // FORGOT PASSWORD
+              // ==================================================
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
@@ -228,6 +276,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 8),
 
+              // ==================================================
+              // LOGIN BUTTON
+              // ==================================================
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -251,10 +302,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 16),
 
+              // ==================================================
+              // OR
+              // ==================================================
               const Text('OR', style: TextStyle(color: AppColors.textGrey)),
 
               const SizedBox(height: 16),
 
+              // ==================================================
+              // CREATE ACCOUNT
+              // ==================================================
               OutlinedButton(
                 onPressed: () {
                   Navigator.push(
@@ -277,6 +334,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 12),
 
+              // ==================================================
+              // CONTINUE AS GUEST
+              // ==================================================
               TextButton(
                 onPressed: _goHome,
                 child: const Text(
