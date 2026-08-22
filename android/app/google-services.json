@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "991959032874",
-    "project_id": "trekcure-910c1",
-    "storage_bucket": "trekcure-910c1.firebasestorage.app"
+    "project_number": "555319363949",
+    "project_id": "trekcure-d8637",
+    "storage_bucket": "trekcure-d8637.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:991959032874:android:b0ddfb5b1e72c052b30f53",
+        "mobilesdk_app_id": "1:555319363949:android:6dcab9121f38aaed057264",
         "android_client_info": {
           "package_name": "com.example.trekcure"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBcrRz3JCYz-_eRkHq5ewkLGFLf2MiFFrQ"
+          "current_key": "AIzaSyDg4nJYhz9kru4riYVx7cq44icnueUpWhQ"
         }
       ],
       "services": {

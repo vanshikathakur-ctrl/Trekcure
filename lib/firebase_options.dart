@@ -41,48 +41,44 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAF5ESGY4OZfxj_xw7XTTN3SFKu-9wwCCI',
-    appId: '1:991959032874:web:06b7ac26e1aa4de4b30f53',
-    messagingSenderId: '991959032874',
-    projectId: 'trekcure-910c1',
-    authDomain: 'trekcure-910c1.firebaseapp.com',
-    storageBucket: 'trekcure-910c1.firebasestorage.app',
-    measurementId: 'G-6QGL5V8Y3F',
+    apiKey: 'AIzaSyCxkMywOG4OdhsvBPRDgVCEEcaQuAj4XVY',
+    appId: '1:555319363949:web:b3d771fc0c3511ac057264',
+    messagingSenderId: '555319363949',
+    projectId: 'trekcure-d8637',
+    authDomain: 'trekcure-d8637.firebaseapp.com',
+    storageBucket: 'trekcure-d8637.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBcrRz3JCYz-_eRkHq5ewkLGFLf2MiFFrQ',
-    appId: '1:991959032874:android:b0ddfb5b1e72c052b30f53',
-    messagingSenderId: '991959032874',
-    projectId: 'trekcure-910c1',
-    storageBucket: 'trekcure-910c1.firebasestorage.app',
+    apiKey: 'AIzaSyDg4nJYhz9kru4riYVx7cq44icnueUpWhQ',
+    appId: '1:555319363949:android:6dcab9121f38aaed057264',
+    messagingSenderId: '555319363949',
+    projectId: 'trekcure-d8637',
+    storageBucket: 'trekcure-d8637.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCvYHYNdC4uWvc5UsXwlyh4r-lY7r_s-CY',
-    appId: '1:991959032874:ios:74bf05e45b3017feb30f53',
-    messagingSenderId: '991959032874',
-    projectId: 'trekcure-910c1',
-    storageBucket: 'trekcure-910c1.firebasestorage.app',
+    apiKey: 'AIzaSyC1cxUBHtNVGfkxE_Qi0y-8N0vVw18iVys',
+    appId: '1:555319363949:ios:614465e9dad1acdb057264',
+    messagingSenderId: '555319363949',
+    projectId: 'trekcure-d8637',
+    storageBucket: 'trekcure-d8637.firebasestorage.app',
     iosBundleId: 'com.example.trekcure',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyCvYHYNdC4uWvc5UsXwlyh4r-lY7r_s-CY',
-    appId: '1:991959032874:ios:74bf05e45b3017feb30f53',
-    messagingSenderId: '991959032874',
-    projectId: 'trekcure-910c1',
-    storageBucket: 'trekcure-910c1.firebasestorage.app',
+    apiKey: 'AIzaSyC1cxUBHtNVGfkxE_Qi0y-8N0vVw18iVys',
+    appId: '1:555319363949:ios:614465e9dad1acdb057264',
+    messagingSenderId: '555319363949',
+    projectId: 'trekcure-d8637',
+    storageBucket: 'trekcure-d8637.firebasestorage.app',
     iosBundleId: 'com.example.trekcure',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyAF5ESGY4OZfxj_xw7XTTN3SFKu-9wwCCI',
-    appId: '1:991959032874:web:f65a1b4857a7976bb30f53',
-    messagingSenderId: '991959032874',
-    projectId: 'trekcure-910c1',
-    authDomain: 'trekcure-910c1.firebaseapp.com',
-    storageBucket: 'trekcure-910c1.firebasestorage.app',
-    measurementId: 'G-7CE392FSMJ',
+    apiKey: 'AIzaSyCxkMywOG4OdhsvBPRDgVCEEcaQuAj4XVY',
+    appId: '1:555319363949:web:b9f0b4daae89bbd3057264',
+    messagingSenderId: '555319363949',
+    projectId: 'trekcure-d8637',
+    authDomain: 'trekcure-d8637.firebaseapp.com',
+    storageBucket: 'trekcure-d8637.firebasestorage.app',
   );
 }

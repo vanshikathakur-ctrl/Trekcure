@@ -25,7 +25,7 @@ android {
     defaultConfig {
         applicationId = "com.example.trekcure"
 
-        minSdk = flutter.minSdkVersion
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
 
         versionCode = flutter.versionCode

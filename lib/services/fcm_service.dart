@@ -1,34 +1,44 @@
+import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> initializeFcm() async {
-  final messaging = FirebaseMessaging.instance;
+  try {
+    debugPrint('========== FCM INITIALIZATION STARTED ==========');
 
-  // Ask for notification permission
-  final settings = await messaging.requestPermission();
+    final messaging = FirebaseMessaging.instance;
 
-  print('Notification permission: ${settings.authorizationStatus}');
+    debugPrint('Requesting notification permission...');
 
-  // Get the FCM token
-  final fcmToken = await messaging.getToken();
+    final settings = await messaging.requestPermission();
 
-  print('FCM TOKEN: $fcmToken');
+    debugPrint(
+      'Notification permission: ${settings.authorizationStatus}',
+    );
 
-  // Get currently logged-in user
-  final user = Supabase.instance.client.auth.currentUser;
+    debugPrint('Getting FCM token...');
 
-  if (user == null) {
-    print('No logged-in user. Token not saved yet.');
-    return;
-  }
+    final fcmToken = await messaging.getToken();
 
-  // Save token to Supabase
-  if (fcmToken != null) {
-    await Supabase.instance.client
-        .from('profiles')
-        .update({'fcm_token': fcmToken})
-        .eq('id', user.id);
+    debugPrint('FCM TOKEN: $fcmToken');
 
-    print('FCM token saved to Supabase');
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      debugPrint('No logged-in user. Token not saved yet.');
+      return;
+    }
+
+    if (fcmToken != null) {
+      await Supabase.instance.client
+          .from('profiles')
+          .update({'fcm_token': fcmToken})
+          .eq('id', user.id);
+
+      debugPrint('FCM token saved to Supabase');
+    }
+  } catch (e, stackTrace) {
+    debugPrint('FCM ERROR: $e');
+    debugPrintStack(stackTrace: stackTrace);
   }
 }

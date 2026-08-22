@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../services/fcm_service.dart';
 import '../theme/app_theme.dart';
 import 'home_dashboard_screen.dart';
 import 'registration_page.dart';
@@ -61,6 +61,11 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       debugPrint('LOGIN SUCCESS: ${response.user!.id}');
+      debugPrint('About to call FCM ');
+      //Initialize FCM
+      await initializeFcm();
+
+      debugPrint('FCM call finished');
 
       if (!mounted) return;
 
