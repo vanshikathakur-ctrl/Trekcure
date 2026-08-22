@@ -26,33 +26,43 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   // ============================================================
   // DYNAMIC LOCATION VARIABLES
   // ============================================================
+
   String _userLocationText = 'Locating...';
 
   // ============================================================
   // DYNAMIC WEATHER STATE
   // ============================================================
+
   double? _temperature;
   double? _humidity;
   double? _windSpeed;
+
   String _weatherCondition = 'Loading...';
   bool _weatherLoading = true;
 
   // ============================================================
   // DYNAMIC CROWD STATE
   // ============================================================
+
   String _crowdLevel = 'Loading...';
   int _crowdPeopleCount = 0;
+
   Color _crowdColor = AppColors.warningOrange;
   bool _isCrowdLoading = true;
 
   // ============================================================
   // OFFLINE MESH STATE
   // ============================================================
+
   int _nearbyMeshNodes = 0;
   bool _meshRelayActive = false;
 
   late final MeshService _meshService;
+
   StreamSubscription<int>? _meshNodeSubscription;
+
+  // NEW: Listen for incoming SOS messages
+  StreamSubscription<Map<String, dynamic>>? _meshSosSubscription;
 
   @override
   void initState() {
@@ -69,36 +79,65 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   // ============================================================
   // START OFFLINE MESH
   // ============================================================
+
   Future<void> _startMesh() async {
     try {
       await _meshService.start();
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _nearbyMeshNodes = _meshService.nearbyNodeCount;
         _meshRelayActive = _meshService.isRunning;
       });
 
+      // ----------------------------------------------------------
+      // LISTEN FOR NODE COUNT CHANGES
+      // ----------------------------------------------------------
+
+      await _meshNodeSubscription?.cancel();
+
       _meshNodeSubscription =
           _meshService.nodeCountStream.listen((nodeCount) {
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
 
         setState(() {
           _nearbyMeshNodes = nodeCount;
           _meshRelayActive = _meshService.isRunning;
         });
+
+        debugPrint('MESH NODE COUNT UPDATED: $nodeCount');
+      });
+
+      // ----------------------------------------------------------
+      // LISTEN FOR INCOMING OFFLINE SOS
+      // ----------------------------------------------------------
+
+      debugPrint('================================');
+      debugPrint('STARTING OFFLINE MESH SOS LISTENER...');
+      debugPrint('================================');
+
+      await _meshSosSubscription?.cancel();
+
+      _meshSosSubscription =
+          _meshService.sosStream.listen((sosData) {
+        debugPrint('================================');
+        debugPrint('🚨 OFFLINE SOS RECEIVED IN HOME');
+        debugPrint('Sender: ${sosData['senderName']}');
+        debugPrint('Payload: ${sosData['payload']}');
+        debugPrint('================================');
+
+        if (!mounted) return;
+
+        _showOfflineSosAlert(sosData);
       });
     } catch (e) {
-      debugPrint('Mesh start error: $e');
+      debugPrint('================================');
+      debugPrint('MESH START ERROR IN HOME');
+      debugPrint('$e');
+      debugPrint('================================');
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _nearbyMeshNodes = 0;
@@ -108,15 +147,66 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   // ============================================================
+  // SHOW OFFLINE SOS ALERT
+  // ============================================================
+
+  void _showOfflineSosAlert(
+    Map<String, dynamic> sosData,
+  ) {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(
+                Icons.warning_rounded,
+                color: Colors.red,
+                size: 30,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'OFFLINE SOS',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            '${sosData['senderName'] ?? 'A nearby TrekCure user'} '
+            'needs emergency assistance!\n\n'
+            'SOS received through the TrekCure offline mesh network.',
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text(
+                'ACKNOWLEDGE',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ============================================================
   // LOAD USER PROFILE
   // ============================================================
+
   Future<void> _loadUserName() async {
     final supabase = Supabase.instance.client;
     final user = supabase.auth.currentUser;
 
-    if (user == null) {
-      return;
-    }
+    if (user == null) return;
 
     try {
       final profile = await supabase
@@ -125,9 +215,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           .eq('id', user.id)
           .maybeSingle();
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _userName = profile?['full_name'] ?? 'User';
@@ -141,10 +229,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   // UNIFIED DASHBOARD DATA LOADER
   // LOCATION + WEATHER + CROWD
   // ============================================================
+
   Future<void> _loadDashboardData() async {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     setState(() {
       _weatherLoading = true;
@@ -152,7 +239,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     });
 
     try {
-      // 1. Verify location permissions
       final bool serviceEnabled =
           await Geolocator.isLocationServiceEnabled();
 
@@ -174,7 +260,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         return;
       }
 
-      // 2. Fetch GPS position
       final Position position =
           await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
@@ -182,13 +267,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         ),
       );
 
-      // 3. Reverse geocode location
       _fetchReverseGeocodeLocation(
         position.latitude,
         position.longitude,
       );
 
-      // 4. Compute crowd density
       final Random random = Random(
         (position.latitude * 100).toInt() +
             (position.longitude * 100).toInt(),
@@ -217,7 +300,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         crowdColor = AppColors.dangerRed;
       }
 
-      // 5. Fetch weather
       final Uri weatherUrl = Uri.parse(
         'https://api.open-meteo.com/v1/forecast'
         '?latitude=${position.latitude}'
@@ -249,9 +331,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         final int weatherCode =
             (current['weather_code'] as num).toInt();
 
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
 
         setState(() {
           _temperature = temp;
@@ -280,6 +360,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   // ============================================================
   // REVERSE GEOCODING
   // ============================================================
+
   Future<void> _fetchReverseGeocodeLocation(
     double lat,
     double lon,
@@ -319,9 +400,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           final String country =
               address['country'] ?? 'India';
 
-          if (!mounted) {
-            return;
-          }
+          if (!mounted) return;
 
           setState(() {
             _userLocationText =
@@ -335,9 +414,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       debugPrint('Reverse geocode error: $e');
     }
 
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     setState(() {
       _userLocationText = 'Mumbai, India';
@@ -347,10 +424,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   // ============================================================
   // FALLBACK METRICS
   // ============================================================
+
   void _setFallbackMetrics() {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     setState(() {
       _userLocationText = 'Mumbai, India';
@@ -366,56 +442,24 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       _crowdPeopleCount = 240;
       _crowdColor = AppColors.warningOrange;
       _isCrowdLoading = false;
-
-      // IMPORTANT:
-      // Do NOT modify mesh values here.
-      // They come only from MeshService.
     });
   }
 
   // ============================================================
   // WEATHER HELPERS
   // ============================================================
+
   String _weatherDescription(int code) {
-    if (code == 0) {
-      return 'Clear sky';
-    }
-
-    if (code == 1) {
-      return 'Mainly clear';
-    }
-
-    if (code == 2) {
-      return 'Partly cloudy';
-    }
-
-    if (code == 3) {
-      return 'Overcast';
-    }
-
-    if (code == 45 || code == 48) {
-      return 'Foggy';
-    }
-
-    if (code >= 51 && code <= 57) {
-      return 'Drizzle';
-    }
-
-    if (code >= 61 && code <= 67) {
-      return 'Rain';
-    }
-
-    if (code >= 71 && code <= 77) {
-      return 'Snow';
-    }
-
-    if (code >= 80 && code <= 82) {
-      return 'Rain showers';
-    }
-
-    if (code >= 95) {
-      return 'Thunderstorm';
-    }
+    if (code == 0) return 'Clear sky';
+    if (code == 1) return 'Mainly clear';
+    if (code == 2) return 'Partly cloudy';
+    if (code == 3) return 'Overcast';
+    if (code == 45 || code == 48) return 'Foggy';
+    if (code >= 51 && code <= 57) return 'Drizzle';
+    if (code >= 61 && code <= 67) return 'Rain';
+    if (code >= 71 && code <= 77) return 'Snow';
+    if (code >= 80 && code <= 82) return 'Rain showers';
+    if (code >= 95) return 'Thunderstorm';
 
     return 'Overcast';
   }
@@ -449,15 +493,22 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     return Icons.cloud_outlined;
   }
 
+  // ============================================================
+  // CLEANUP
+  // ============================================================
+
   @override
   void dispose() {
     _meshNodeSubscription?.cancel();
+    _meshSosSubscription?.cancel();
+
     super.dispose();
   }
 
   // ============================================================
   // BUILD METHOD
   // ============================================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -470,35 +521,42 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               color: AppColors.textDark,
             ),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Hello, $_userName 👋',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on,
-                      size: 13,
-                      color: AppColors.textGrey,
+            Expanded(
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hello, $_userName 👋',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(width: 2),
-                    Text(
-                      _userLocationText,
-                      style: const TextStyle(
-                        fontSize: 12,
+                  ),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on,
+                        size: 13,
                         color: AppColors.textGrey,
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          _userLocationText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textGrey,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -550,14 +608,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           physics:
               const AlwaysScrollableScrollPhysics(),
           padding:
-              const EdgeInsets.fromLTRB(16, 4, 16, 16),
+              const EdgeInsets.fromLTRB(
+            16,
+            4,
+            16,
+            16,
+          ),
           child: Column(
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
-              // =================================================
-              // 1. SAFETY STATUS
-              // =================================================
               AppCard(
                 color: AppColors.lightGreenBg,
                 child: Row(
@@ -614,9 +674,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
               const SizedBox(height: 14),
 
-              // =================================================
-              // 2. WEATHER + CROWD
-              // =================================================
+              // WEATHER + CROWD
+
               Row(
                 crossAxisAlignment:
                     CrossAxisAlignment.start,
@@ -728,12 +787,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                                 color: _crowdColor,
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                _crowdLevel,
-                                style: TextStyle(
-                                  fontWeight:
-                                      FontWeight.bold,
-                                  color: _crowdColor,
+                              Expanded(
+                                child: Text(
+                                  _crowdLevel,
+                                  overflow:
+                                      TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontWeight:
+                                        FontWeight.bold,
+                                    color: _crowdColor,
+                                  ),
                                 ),
                               ),
                             ],
@@ -776,9 +839,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
               const SizedBox(height: 14),
 
-              // =================================================
-              // 3. TRAVEL ALERT
-              // =================================================
+              // TRAVEL ALERT
+
               AppCard(
                 color: AppColors.dangerBgLight,
                 child: Row(
@@ -854,8 +916,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               const SizedBox(height: 14),
 
               // =================================================
-              // 4. OFFLINE MESH
+              // OFFLINE MESH
               // =================================================
+
               AppCard(
                 color: const Color(0xFFF0FDF4),
                 child: Row(
@@ -878,26 +941,30 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       ),
                     ),
                     const SizedBox(width: 14),
+
                     Expanded(
                       child: Column(
                         crossAxisAlignment:
                             CrossAxisAlignment.start,
                         children: [
                           Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment
-                                    .spaceBetween,
                             children: [
-                              const Text(
-                                'Offline Mesh Active',
-                                style: TextStyle(
-                                  fontWeight:
-                                      FontWeight.bold,
-                                  fontSize: 14,
-                                  color:
-                                      AppColors.textDark,
+                              const Expanded(
+                                child: Text(
+                                  'Offline Mesh Active',
+                                  maxLines: 1,
+                                  overflow:
+                                      TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontWeight:
+                                        FontWeight.bold,
+                                    fontSize: 14,
+                                    color:
+                                        AppColors.textDark,
+                                  ),
                                 ),
                               ),
+                              const SizedBox(width: 8),
                               Text(
                                 '● $_nearbyMeshNodes Nodes',
                                 style: const TextStyle(
@@ -910,7 +977,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                               ),
                             ],
                           ),
+
                           const SizedBox(height: 3),
+
                           Text(
                             _meshRelayActive
                                 ? 'Mesh active. Listening for nearby TrekCure devices and distress signals.'

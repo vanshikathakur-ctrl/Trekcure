@@ -75,6 +75,7 @@ async function sendFcmNotification(
   accessToken: string,
   projectId: string,
   sosId: string,
+  sosUserName: string,
 ) {
   const response = await fetch(
     `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
@@ -90,8 +91,8 @@ async function sendFcmNotification(
 
           notification: {
             title: "🚨 SOS EMERGENCY ALERT",
-            body: "Your emergency contact has activated an SOS!",
-          },
+            body: `${sosUserName} has pressed Emergency SOS. Contact/help them immediately.`,
+    },
 
           data: {
             type: "sos",
@@ -163,6 +164,22 @@ export default {
         }
 
         console.log("SOS belongs to user:", sos.user_id);
+        const { data: sosUser, error: sosUserError } =
+  await ctx.supabaseAdmin
+    .from("profiles")
+    .select("full_name")
+    .eq("id", sos.user_id)
+    .single();
+
+if (sosUserError) {
+  throw new Error(
+    `Failed to get SOS user profile: ${sosUserError.message}`,
+  );
+}
+
+const sosUserName = sosUser?.full_name || "Your emergency contact";
+
+console.log("SOS triggered by:", sosUserName);
 
         // --------------------------------------------
         // 2. Find emergency contacts of SOS user
@@ -242,12 +259,12 @@ export default {
         for (const recipient of recipients) {
           try {
             const result = await sendFcmNotification(
-              recipient.fcm_token,
-              accessToken,
-              projectId,
-              sos_id,
-            );
-
+               recipient.fcm_token,
+               accessToken,
+               projectId,
+                sos_id,
+                sosUserName,
+);
             console.log(
               `Notification sent to ${recipient.full_name}`,
             );

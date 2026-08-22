@@ -102,11 +102,39 @@ debugPrint('INSERTING SOS INTO SUPABASE...');
 
     debugPrint('SOS RESPONSE: $response');
 
-    final sosId = response['id'] as String;
+   final sosId = response['id'] as String;
 
-    debugPrint('SOS CREATED SUCCESSFULLY');
-    debugPrint('SOS ID: $sosId');
+debugPrint('SOS CREATED SUCCESSFULLY');
+debugPrint('SOS ID: $sosId');
 
+// Automatically notify emergency contacts
+debugPrint('CALLING FCM SOS FUNCTION...');
+
+final notificationResponse = await _supabase.functions.invoke(
+  'send-fcm-sos',
+  body: {
+    'sos_id': sosId,
+  },
+);
+
+debugPrint(
+  'FCM FUNCTION RESPONSE: ${notificationResponse.data}',
+);
+
+if (!mounted) return;
+
+await Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (_) => SosActivatedScreen(
+      sosId: sosId,
+    ),
+  ),
+);
+
+debugPrint(
+  'FCM FUNCTION RESPONSE: ${notificationResponse.data}',
+);
     if (!mounted) return;
 
     await Navigator.push(

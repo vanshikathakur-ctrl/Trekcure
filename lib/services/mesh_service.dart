@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_mesh_network/flutter_mesh_network.dart';
@@ -9,10 +10,14 @@ class MeshService {
 
   static final MeshService instance = MeshService._();
 
+  // ============================================================
+  // MESH NETWORK
+  // ============================================================
+
   final MeshNetwork _mesh = MeshNetwork(
     config: const MeshConfig(
-      serviceName: 'TC',
-      strategy: TransportStrategy.maxPerformance,
+      serviceName: 'trekcure-mesh',
+      strategy: TransportStrategy.lowPower,
       enableLogging: true,
     ),
   );
@@ -36,18 +41,34 @@ class MeshService {
   Stream<Map<String, dynamic>> get sosStream => _sosController.stream;
 
   StreamSubscription<MeshNode>? _nodeSubscription;
-
-  // Generic because the package message type is internal to the package.
   StreamSubscription? _messageSubscription;
+
+  final Set<String> _discoveredNodes = {};
 
   int _nearbyNodeCount = 0;
   bool _isRunning = false;
 
+  String? _userId;
+  String? _userName;
+
+  DateTime? _lastSosSentAt;
+
   int get nearbyNodeCount => _nearbyNodeCount;
+
   bool get isRunning => _isRunning;
 
   // ============================================================
-  // PERMISSIONS
+  // CREATE DEVICE ID
+  // ============================================================
+
+  String _createDeviceId() {
+    final random = Random();
+
+    return 'tc_${100000 + random.nextInt(900000)}';
+  }
+
+  // ============================================================
+  // REQUEST PERMISSIONS
   // ============================================================
 
   Future<bool> _requestMeshPermissions() async {
@@ -56,12 +77,10 @@ class MeshService {
       Permission.bluetoothAdvertise,
       Permission.bluetoothConnect,
       Permission.location,
+      Permission.nearbyWifiDevices,
     ];
 
     final statuses = await permissions.request();
-
-    final allGranted =
-        statuses.values.every((status) => status.isGranted);
 
     debugPrint('==============================');
     debugPrint('MESH PERMISSION STATUS');
@@ -71,10 +90,52 @@ class MeshService {
       debugPrint('${entry.key}: ${entry.value}');
     }
 
-    debugPrint('All permissions granted: $allGranted');
+    final bluetoothScan =
+        statuses[Permission.bluetoothScan]?.isGranted ?? false;
+
+    final bluetoothAdvertise =
+        statuses[Permission.bluetoothAdvertise]?.isGranted ?? false;
+
+    final bluetoothConnect =
+        statuses[Permission.bluetoothConnect]?.isGranted ?? false;
+
+    final location =
+        statuses[Permission.location]?.isGranted ?? false;
+
+    final granted =
+        bluetoothScan &&
+        bluetoothAdvertise &&
+        bluetoothConnect &&
+        location;
+
+    debugPrint('Required permissions granted: $granted');
     debugPrint('==============================');
 
-    return allGranted;
+    return granted;
+  }
+
+  // ============================================================
+  // UPDATE NODE COUNT
+  // ============================================================
+
+  void _updateNodeCount() {
+    _nearbyNodeCount = _mesh.onlineNodeCount;
+
+    debugPrint('==============================');
+    debugPrint('MESH NODE STATUS');
+    debugPrint('Local device: $_userName');
+    debugPrint('Online nodes: $_nearbyNodeCount');
+
+    debugPrint(
+      'Tracked nodes: '
+      '${_discoveredNodes.isEmpty ? "NONE" : _discoveredNodes.join(", ")}',
+    );
+
+    debugPrint('==============================');
+
+    if (!_nodeCountController.isClosed) {
+      _nodeCountController.add(_nearbyNodeCount);
+    }
   }
 
   // ============================================================
@@ -84,6 +145,10 @@ class MeshService {
   Future<void> start() async {
     if (_isRunning) {
       debugPrint('Mesh is already running');
+      debugPrint('Local device: $_userName');
+      debugPrint('Nearby nodes: $_nearbyNodeCount');
+
+      _updateNodeCount();
       return;
     }
 
@@ -97,86 +162,160 @@ class MeshService {
 
       if (!permissionsGranted) {
         throw Exception(
-          'Required Bluetooth permissions were not granted',
+          'Required mesh permissions were not granted',
         );
       }
 
-      // ----------------------------------------------------------
+      // Create identity.
+      _userId ??= _createDeviceId();
+
+      final suffix =
+          _userId!.substring(_userId!.length - 4);
+
+      _userName ??= 'TrekCure-$suffix';
+
+      debugPrint('==============================');
+      debugPrint('LOCAL MESH IDENTITY');
+      debugPrint('User ID: $_userId');
+      debugPrint('User name: $_userName');
+      debugPrint('==============================');
+
+      _discoveredNodes.clear();
+
+      // ==========================================================
       // NODE LISTENER
-      // ----------------------------------------------------------
+      // ==========================================================
 
       await _nodeSubscription?.cancel();
 
       _nodeSubscription =
           _mesh.onNodeChanged.listen((MeshNode node) {
-        _nearbyNodeCount = _mesh.onlineNodeCount;
+        final nodeName = node.name.toString();
 
         debugPrint('==============================');
-        debugPrint('MESH NODE DETECTED');
-        debugPrint('Node name: ${node.name}');
-        debugPrint('Online nodes: $_nearbyNodeCount');
+        debugPrint('MESH NODE EVENT');
+        debugPrint('Local device: $_userName');
+        debugPrint('Detected node: $nodeName');
+
+        debugPrint(
+          'Package online count: ${_mesh.onlineNodeCount}',
+        );
+
+        debugPrint('Node online: ${node.isOnline()}');
+
         debugPrint('==============================');
 
-        if (!_nodeCountController.isClosed) {
-          _nodeCountController.add(_nearbyNodeCount);
+        // Ignore our own device.
+        if (nodeName == _userName) {
+          debugPrint('Ignoring local device.');
+          return;
         }
+
+        // Add or remove device depending on its state.
+        if (node.isOnline()) {
+          _discoveredNodes.add(nodeName);
+
+          debugPrint(
+            'DEVICE DISCOVERED: $nodeName',
+          );
+        } else {
+          _discoveredNodes.remove(nodeName);
+
+          debugPrint(
+            'DEVICE LEFT/OFFLINE: $nodeName',
+          );
+        }
+
+        _updateNodeCount();
       });
 
-      // ----------------------------------------------------------
-      // START THE NETWORK
-      // ----------------------------------------------------------
-
-      final userId =
-          'tc${DateTime.now().millisecondsSinceEpoch % 100000}';
-
-      await _mesh.start(
-        userId: userId,
-        userName: 'TC',
-      );
-
-      _isRunning = _mesh.isRunning;
-
-      // ----------------------------------------------------------
-      // LISTEN FOR INCOMING MESSAGES
-      // ----------------------------------------------------------
+      // ==========================================================
+      // MESSAGE LISTENER
+      // ==========================================================
 
       await _messageSubscription?.cancel();
 
-      _messageSubscription = _mesh.onMessage.listen((msg) {
-        debugPrint('==============================');
-        debugPrint('MESH MESSAGE RECEIVED');
-        debugPrint('From: ${msg.senderName}');
-        debugPrint('Payload: ${msg.payload}');
-        debugPrint('==============================');
-
-        // Detect SOS messages.
-        //
-        // The package may encode sendSos() internally.
-        // We print the payload first so we can see its format.
+      _messageSubscription =
+          _mesh.onMessage.listen((msg) {
         final payload = msg.payload.toString();
 
+        final senderName =
+            msg.senderName.toString();
+
+        debugPrint('==============================');
+        debugPrint('MESH MESSAGE EVENT');
+        debugPrint('Local device: $_userName');
+        debugPrint('Local ID: $_userId');
+        debugPrint('Sender: $senderName');
+        debugPrint('Payload: $payload');
+        debugPrint('==============================');
+
+        // Ignore our own messages.
+        if (senderName == _userName) {
+          debugPrint(
+            'Ignoring own message echoed by mesh.',
+          );
+          return;
+        }
+
+        // Prevent immediate local SOS echo.
+        final lastSent = _lastSosSentAt;
+
+        if (lastSent != null) {
+          final difference =
+              DateTime.now().difference(lastSent);
+
+          if (difference.inSeconds < 2 &&
+              payload.toLowerCase().contains('sos')) {
+            debugPrint(
+              'Ignoring possible local SOS echo.',
+            );
+            return;
+          }
+        }
+
+        // Handle SOS.
         if (payload.toLowerCase().contains('sos')) {
-          debugPrint('🚨 INCOMING SOS DETECTED');
+          debugPrint('==============================');
+          debugPrint('REMOTE SOS RECEIVED');
+          debugPrint('From: $senderName');
+          debugPrint('On device: $_userName');
+          debugPrint('==============================');
 
           if (!_sosController.isClosed) {
             _sosController.add({
-              'senderName': msg.senderName.toString(),
+              'senderName': senderName,
               'payload': payload,
+              'receivedAt':
+                  DateTime.now().toIso8601String(),
             });
           }
         }
       });
 
-      _nearbyNodeCount = _mesh.onlineNodeCount;
+      // ==========================================================
+      // START NETWORK
+      // ==========================================================
 
-      if (!_nodeCountController.isClosed) {
-        _nodeCountController.add(_nearbyNodeCount);
-      }
+      await _mesh.start(
+        userId: _userId!,
+        userName: _userName!,
+      );
+
+      _isRunning = _mesh.isRunning;
+
+      _updateNodeCount();
 
       debugPrint('==============================');
       debugPrint('MESH STARTED SUCCESSFULLY');
-      debugPrint('User ID: $userId');
-      debugPrint('Nearby nodes: $_nearbyNodeCount');
+      debugPrint('User ID: $_userId');
+      debugPrint('User name: $_userName');
+      debugPrint('Running: $_isRunning');
+
+      debugPrint(
+        'Online nodes: ${_mesh.onlineNodeCount}',
+      );
+
       debugPrint('==============================');
     } catch (e) {
       _isRunning = false;
@@ -205,6 +344,9 @@ class MeshService {
       await _mesh.stop();
 
       _isRunning = false;
+
+      _discoveredNodes.clear();
+
       _nearbyNodeCount = 0;
 
       if (!_nodeCountController.isClosed) {
@@ -213,6 +355,7 @@ class MeshService {
 
       debugPrint('==============================');
       debugPrint('MESH SERVICE STOPPED');
+      debugPrint('Local device: $_userName');
       debugPrint('==============================');
     } catch (e) {
       debugPrint('MESH STOP ERROR: $e');
@@ -229,15 +372,23 @@ class MeshService {
     double? longitude,
   }) async {
     if (!_isRunning) {
-      throw Exception('Offline mesh is not running');
+      throw Exception(
+        'Offline mesh is not running',
+      );
     }
+
+    _lastSosSentAt = DateTime.now();
 
     debugPrint('==============================');
     debugPrint('OFFLINE SOS BROADCAST');
+    debugPrint('Sender device: $_userName');
+    debugPrint('Sender ID: $_userId');
     debugPrint('Message: $message');
-    debugPrint('Latitude: $latitude');
-    debugPrint('Longitude: $longitude');
-    debugPrint('Nearby nodes: $_nearbyNodeCount');
+
+    debugPrint(
+      'Online peers: ${_mesh.onlineNodeCount}',
+    );
+
     debugPrint('==============================');
 
     await _mesh.sendSos(
@@ -247,6 +398,7 @@ class MeshService {
 
     debugPrint('==============================');
     debugPrint('SOS SENT THROUGH TREKCURE MESH');
+    debugPrint('From: $_userName');
     debugPrint('==============================');
   }
 
