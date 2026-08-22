@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -10,16 +8,6 @@ import 'registration_page.dart';
 
 // ==================================================================
 // SUPABASE PASSWORD RESET REDIRECT
-// ==================================================================
-//
-// This SAME URL must also be added to:
-// Supabase Dashboard
-// -> Authentication
-// -> URL Configuration
-// -> Redirect URLs
-//
-// And Android must be configured to open this deep link.
-//
 // ==================================================================
 
 const String _passwordResetRedirect =
@@ -33,12 +21,10 @@ class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() =>
-      _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState
-    extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _idController =
       TextEditingController();
 
@@ -48,75 +34,6 @@ class _LoginScreenState
   bool _obscurePassword = true;
   bool _isLoading = false;
 
-  StreamSubscription<AuthState>?
-      _authSubscription;
-
-  bool _resetScreenAlreadyOpened = false;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _startPasswordRecoveryListener();
-  }
-
-  // ============================================================
-  // PASSWORD RECOVERY LISTENER
-  // ============================================================
-
-  void _startPasswordRecoveryListener() {
-    _authSubscription =
-        Supabase.instance.client.auth
-            .onAuthStateChange
-            .listen(
-      (AuthState data) {
-        debugPrint(
-          'AUTH EVENT RECEIVED: ${data.event}',
-        );
-
-        if (data.event ==
-            AuthChangeEvent.passwordRecovery) {
-          _openResetPasswordScreen();
-        }
-      },
-    );
-  }
-
-  // ============================================================
-  // OPEN RESET SCREEN
-  // ============================================================
-
-  void _openResetPasswordScreen() {
-    if (!mounted) return;
-
-    if (_resetScreenAlreadyOpened) {
-      return;
-    }
-
-    _resetScreenAlreadyOpened =
-        true;
-
-    WidgetsBinding.instance
-        .addPostFrameCallback(
-      (_) {
-        if (!mounted) return;
-
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                const ResetPasswordScreen(),
-          ),
-        ).then(
-          (_) {
-            _resetScreenAlreadyOpened =
-                false;
-          },
-        );
-      },
-    );
-  }
-
   // ============================================================
   // CONTINUE AS GUEST
   // ============================================================
@@ -125,8 +42,7 @@ class _LoginScreenState
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            const HomeDashboardScreen(),
+        builder: (_) => const HomeDashboardScreen(),
       ),
     );
   }
@@ -136,11 +52,9 @@ class _LoginScreenState
   // ============================================================
 
   Future<void> _loginUser() async {
-    final String email =
-        _idController.text.trim();
+    final String email = _idController.text.trim();
 
-    final String password =
-        _passwordController.text;
+    final String password = _passwordController.text;
 
     if (email.isEmpty) {
       _showMessage(
@@ -176,8 +90,7 @@ class _LoginScreenState
       }
 
       final Session? session =
-          Supabase.instance.client.auth
-              .currentSession;
+          Supabase.instance.client.auth.currentSession;
 
       if (session == null) {
         _showMessage(
@@ -289,18 +202,14 @@ class _LoginScreenState
     ScaffoldMessenger.of(context)
         .showSnackBar(
       SnackBar(
-        content:
-            Text(message),
-        behavior:
-            SnackBarBehavior.floating,
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
   @override
   void dispose() {
-    _authSubscription?.cancel();
-
     _idController.dispose();
     _passwordController.dispose();
 
@@ -323,8 +232,7 @@ class _LoginScreenState
             horizontal: 24,
             vertical: 16,
           ),
-          child:
-              Column(
+          child: Column(
             crossAxisAlignment:
                 CrossAxisAlignment.center,
             children: [
@@ -337,12 +245,9 @@ class _LoginScreenState
               // ==================================================
 
               RichText(
-                text:
-                    const TextSpan(
-                  style:
-                      TextStyle(
-                    fontSize:
-                        26,
+                text: const TextSpan(
+                  style: TextStyle(
+                    fontSize: 26,
                     fontWeight:
                         FontWeight.bold,
                     color:
@@ -350,14 +255,11 @@ class _LoginScreenState
                   ),
                   children: [
                     TextSpan(
-                      text:
-                          'Trek',
+                      text: 'Trek',
                     ),
                     TextSpan(
-                      text:
-                          'Cure',
-                      style:
-                          TextStyle(
+                      text: 'Cure',
+                      style: TextStyle(
                         color:
                             AppColors.primaryGreen,
                       ),
@@ -376,10 +278,8 @@ class _LoginScreenState
 
               const Text(
                 'Welcome Back!',
-                style:
-                    TextStyle(
-                  fontSize:
-                      20,
+                style: TextStyle(
+                  fontSize: 20,
                   fontWeight:
                       FontWeight.bold,
                 ),
@@ -391,8 +291,7 @@ class _LoginScreenState
 
               const Text(
                 'Login to continue your journey',
-                style:
-                    TextStyle(
+                style: TextStyle(
                   color:
                       AppColors.textGrey,
                 ),
@@ -411,21 +310,16 @@ class _LoginScreenState
                     BorderRadius.circular(
                   20,
                 ),
-                child:
-                    SizedBox(
+                child: SizedBox(
                   width:
                       double.infinity,
-                  height:
-                      160,
-                  child:
-                      Image.asset(
+                  height: 160,
+                  child: Image.asset(
                     'asset/images/login_travel.jpeg',
-                    fit:
-                        BoxFit.cover,
+                    fit: BoxFit.cover,
                     alignment:
                         Alignment.center,
-                    errorBuilder:
-                        (
+                    errorBuilder: (
                       context,
                       error,
                       stackTrace,
@@ -447,19 +341,16 @@ class _LoginScreenState
                             Icon(
                               Icons
                                   .image_not_supported_outlined,
-                              size:
-                                  40,
+                              size: 40,
                               color:
                                   Colors.grey,
                             ),
                             SizedBox(
-                              height:
-                                  8,
+                              height: 8,
                             ),
                             Text(
                               'Image could not be loaded',
-                              style:
-                                  TextStyle(
+                              style: TextStyle(
                                 color:
                                     Colors.grey,
                               ),
@@ -485,14 +376,12 @@ class _LoginScreenState
                     _idController,
                 keyboardType:
                     TextInputType.emailAddress,
-                autocorrect:
-                    false,
+                autocorrect: false,
                 decoration:
                     const InputDecoration(
                   hintText:
                       'Email / Mobile Number',
-                  prefixIcon:
-                      Icon(
+                  prefixIcon: Icon(
                     Icons.email_outlined,
                   ),
                 ),
@@ -511,32 +400,26 @@ class _LoginScreenState
                     _passwordController,
                 obscureText:
                     _obscurePassword,
-                decoration:
-                    InputDecoration(
-                  hintText:
-                      'Password',
+                decoration: InputDecoration(
+                  hintText: 'Password',
                   prefixIcon:
                       const Icon(
                     Icons.lock_outline,
                   ),
                   suffixIcon:
                       IconButton(
-                    icon:
-                        Icon(
+                    icon: Icon(
                       _obscurePassword
                           ? Icons
                               .visibility_off_outlined
                           : Icons
                               .visibility_outlined,
                     ),
-                    onPressed:
-                        () {
-                      setState(
-                        () {
-                          _obscurePassword =
-                              !_obscurePassword;
-                        },
-                      );
+                    onPressed: () {
+                      setState(() {
+                        _obscurePassword =
+                            !_obscurePassword;
+                      });
                     },
                   ),
                 ),
@@ -549,15 +432,12 @@ class _LoginScreenState
               Align(
                 alignment:
                     Alignment.centerRight,
-                child:
-                    TextButton(
+                child: TextButton(
                   onPressed:
                       _forgotPassword,
-                  child:
-                      const Text(
+                  child: const Text(
                     'Forgot Password?',
-                    style:
-                        TextStyle(
+                    style: TextStyle(
                       color:
                           AppColors.primaryGreen,
                     ),
@@ -576,10 +456,8 @@ class _LoginScreenState
               SizedBox(
                 width:
                     double.infinity,
-                height:
-                    52,
-                child:
-                    ElevatedButton(
+                height: 52,
+                child: ElevatedButton(
                   onPressed:
                       _isLoading
                           ? null
@@ -587,22 +465,18 @@ class _LoginScreenState
                   child:
                       _isLoading
                           ? const SizedBox(
-                              width:
-                                  22,
-                              height:
-                                  22,
+                              width: 22,
+                              height: 22,
                               child:
                                   CircularProgressIndicator(
                                 color:
                                     Colors.white,
-                                strokeWidth:
-                                    2.5,
+                                strokeWidth: 2.5,
                               ),
                             )
                           : const Text(
                               'Login',
-                              style:
-                                  TextStyle(
+                              style: TextStyle(
                                 fontWeight:
                                     FontWeight.bold,
                               ),
@@ -616,8 +490,7 @@ class _LoginScreenState
 
               const Text(
                 'OR',
-                style:
-                    TextStyle(
+                style: TextStyle(
                   color:
                       AppColors.textGrey,
                 ),
@@ -632,8 +505,7 @@ class _LoginScreenState
               // ==================================================
 
               OutlinedButton(
-                onPressed:
-                    () {
+                onPressed: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -648,8 +520,7 @@ class _LoginScreenState
                       const Size.fromHeight(
                     52,
                   ),
-                  side:
-                      const BorderSide(
+                  side: const BorderSide(
                     color:
                         AppColors.primaryGreen,
                   ),
@@ -661,11 +532,9 @@ class _LoginScreenState
                     ),
                   ),
                 ),
-                child:
-                    const Text(
+                child: const Text(
                   'Create New Account',
-                  style:
-                      TextStyle(
+                  style: TextStyle(
                     color:
                         AppColors.primaryGreen,
                   ),
@@ -681,13 +550,10 @@ class _LoginScreenState
               // ==================================================
 
               TextButton(
-                onPressed:
-                    _goHome,
-                child:
-                    const Text(
+                onPressed: _goHome,
+                child: const Text(
                   'Continue as Guest',
-                  style:
-                      TextStyle(
+                  style: TextStyle(
                     color:
                         AppColors.textGrey,
                   ),
@@ -729,10 +595,6 @@ class _ForgotPasswordScreenState
 
   bool _loading = false;
 
-  // ============================================================
-  // SEND RESET LINK
-  // ============================================================
-
   Future<void> _sendResetEmail() async {
     final String email =
         _emailController.text.trim();
@@ -756,10 +618,6 @@ class _ForgotPasswordScreenState
     });
 
     try {
-      debugPrint(
-        'REQUESTING PASSWORD RESET FOR: $email',
-      );
-
       await Supabase.instance.client.auth
           .resetPasswordForEmail(
         email,
@@ -767,15 +625,7 @@ class _ForgotPasswordScreenState
             _passwordResetRedirect,
       );
 
-      debugPrint(
-        'PASSWORD RESET EMAIL REQUEST COMPLETED',
-      );
-
       if (!mounted) return;
-
-      // ========================================================
-      // SHOW CONFIRMATION
-      // ========================================================
 
       await showDialog(
         context: context,
@@ -783,41 +633,35 @@ class _ForgotPasswordScreenState
         builder:
             (dialogContext) {
           return AlertDialog(
-            title:
-                const Row(
+            title: const Row(
               children: [
                 Icon(
                   Icons
                       .mark_email_read_outlined,
                   color:
-                      AppColors
-                          .primaryGreen,
+                      AppColors.primaryGreen,
                 ),
                 SizedBox(
                   width: 10,
                 ),
                 Expanded(
-                  child:
-                      Text(
+                  child: Text(
                     'Reset link sent',
                   ),
                 ),
               ],
             ),
-            content:
-                Text(
-              'A password reset link has been sent to:\n\n$email\n\nOpen your email and tap the reset link. TrekCure will open the password-change screen.',
+            content: Text(
+              'A password reset link has been sent to:\n\n$email\n\nOpen your email and tap the reset link.',
             ),
             actions: [
               ElevatedButton(
-                onPressed:
-                    () {
+                onPressed: () {
                   Navigator.pop(
                     dialogContext,
                   );
                 },
-                child:
-                    const Text(
+                child: const Text(
                   'OK',
                 ),
               ),
@@ -828,19 +672,11 @@ class _ForgotPasswordScreenState
 
       if (!mounted) return;
 
-      Navigator.pop(
-        context,
-      );
+      Navigator.pop(context);
     } on AuthException catch (e) {
-      debugPrint(
-        'PASSWORD RESET AUTH ERROR: ${e.message}',
-      );
-
       if (!mounted) return;
 
-      _message(
-        e.message,
-      );
+      _message(e.message);
     } catch (e) {
       debugPrint(
         'PASSWORD RESET ERROR: $e',
@@ -871,8 +707,7 @@ class _ForgotPasswordScreenState
     ScaffoldMessenger.of(context)
         .showSnackBar(
       SnackBar(
-        content:
-            Text(message),
+        content: Text(message),
         behavior:
             SnackBarBehavior.floating,
       ),
@@ -882,6 +717,7 @@ class _ForgotPasswordScreenState
   @override
   void dispose() {
     _emailController.dispose();
+
     super.dispose();
   }
 
@@ -890,22 +726,17 @@ class _ForgotPasswordScreenState
     BuildContext context,
   ) {
     return Scaffold(
-      appBar:
-          AppBar(
-        title:
-            const Text(
+      appBar: AppBar(
+        title: const Text(
           'Forgot Password',
-          style:
-              TextStyle(
+          style: TextStyle(
             fontWeight:
                 FontWeight.bold,
-            fontSize:
-                16,
+            fontSize: 16,
           ),
         ),
       ),
-      body:
-          ListView(
+      body: ListView(
         padding:
             const EdgeInsets.all(24),
         children: [
@@ -917,8 +748,7 @@ class _ForgotPasswordScreenState
             radius: 38,
             backgroundColor:
                 AppColors.lightGreenBg,
-            child:
-                Icon(
+            child: Icon(
               Icons.lock_reset_rounded,
               size: 42,
               color:
@@ -934,8 +764,7 @@ class _ForgotPasswordScreenState
             'Reset your password',
             textAlign:
                 TextAlign.center,
-            style:
-                TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight:
                   FontWeight.bold,
@@ -950,8 +779,7 @@ class _ForgotPasswordScreenState
             'Enter the email address associated with your TrekCure account. We will send you a secure password reset link.',
             textAlign:
                 TextAlign.center,
-            style:
-                TextStyle(
+            style: TextStyle(
               color:
                   AppColors.textGrey,
             ),
@@ -966,16 +794,14 @@ class _ForgotPasswordScreenState
                 _emailController,
             keyboardType:
                 TextInputType.emailAddress,
-            autocorrect:
-                false,
+            autocorrect: false,
             decoration:
                 const InputDecoration(
               labelText:
                   'Email Address',
               hintText:
                   'Enter your account email',
-              prefixIcon:
-                  Icon(
+              prefixIcon: Icon(
                 Icons.email_outlined,
               ),
             ),
@@ -987,8 +813,7 @@ class _ForgotPasswordScreenState
 
           SizedBox(
             height: 52,
-            child:
-                ElevatedButton(
+            child: ElevatedButton(
               onPressed:
                   _loading
                       ? null
@@ -996,22 +821,18 @@ class _ForgotPasswordScreenState
               child:
                   _loading
                       ? const SizedBox(
-                          width:
-                              22,
-                          height:
-                              22,
+                          width: 22,
+                          height: 22,
                           child:
                               CircularProgressIndicator(
                             color:
                                 Colors.white,
-                            strokeWidth:
-                                2.5,
+                            strokeWidth: 2.5,
                           ),
                         )
                       : const Text(
                           'Send Reset Link',
-                          style:
-                              TextStyle(
+                          style: TextStyle(
                             fontWeight:
                                 FontWeight.bold,
                           ),
@@ -1024,498 +845,13 @@ class _ForgotPasswordScreenState
           ),
 
           const Text(
-            'The reset email contains a secure link. After opening it, TrekCure will allow you to create a new password.',
+            'The reset email contains a secure link. After opening it, you will be able to create a new password.',
             textAlign:
                 TextAlign.center,
-            style:
-                TextStyle(
+            style: TextStyle(
               fontSize: 12,
               color:
                   AppColors.textGrey,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ==================================================================
-// RESET PASSWORD SCREEN
-// ==================================================================
-
-class ResetPasswordScreen
-    extends StatefulWidget {
-  const ResetPasswordScreen({
-    super.key,
-  });
-
-  @override
-  State<ResetPasswordScreen>
-      createState() =>
-          _ResetPasswordScreenState();
-}
-
-class _ResetPasswordScreenState
-    extends State<ResetPasswordScreen> {
-  final TextEditingController
-      _newPasswordController =
-      TextEditingController();
-
-  final TextEditingController
-      _confirmPasswordController =
-      TextEditingController();
-
-  bool _hideNewPassword = true;
-  bool _hideConfirmPassword = true;
-
-  bool _loading = false;
-
-  // ============================================================
-  // UPDATE PASSWORD
-  // ============================================================
-
-  Future<void> _updatePassword() async {
-    final String newPassword =
-        _newPasswordController.text;
-
-    final String confirmPassword =
-        _confirmPasswordController.text;
-
-    if (newPassword.isEmpty) {
-      _message(
-        'Please enter a new password.',
-      );
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      _message(
-        'Password must be at least 6 characters.',
-      );
-      return;
-    }
-
-    if (confirmPassword.isEmpty) {
-      _message(
-        'Please confirm your new password.',
-      );
-      return;
-    }
-
-    if (newPassword !=
-        confirmPassword) {
-      _message(
-        'Passwords do not match.',
-      );
-      return;
-    }
-
-    // ==========================================================
-    // VERIFY THAT THE RECOVERY SESSION EXISTS
-    // ==========================================================
-
-    final Session? session =
-        Supabase.instance.client.auth
-            .currentSession;
-
-    if (session == null) {
-      _message(
-        'Your password reset session has expired. Please request a new reset link.',
-      );
-      return;
-    }
-
-    setState(() {
-      _loading = true;
-    });
-
-    try {
-      debugPrint(
-        'UPDATING PASSWORD IN SUPABASE AUTH...',
-      );
-
-      // ========================================================
-      // THIS ACTUALLY CHANGES THE PASSWORD
-      // ========================================================
-
-      await Supabase.instance.client.auth
-          .updateUser(
-        UserAttributes(
-          password:
-              newPassword,
-        ),
-      );
-
-      debugPrint(
-        'PASSWORD WAS UPDATED SUCCESSFULLY',
-      );
-
-      if (!mounted) return;
-
-      // ========================================================
-      // SUCCESS MESSAGE
-      // ========================================================
-
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder:
-            (dialogContext) {
-          return AlertDialog(
-            title:
-                const Row(
-              children: [
-                Icon(
-                  Icons.check_circle,
-                  color:
-                      AppColors
-                          .primaryGreen,
-                ),
-                SizedBox(
-                  width: 10,
-                ),
-                Expanded(
-                  child:
-                      Text(
-                    'Password changed',
-                  ),
-                ),
-              ],
-            ),
-            content:
-                const Text(
-              'Your TrekCure password has been changed successfully. You can now log in using your new password.',
-            ),
-            actions: [
-              ElevatedButton(
-                onPressed:
-                    () {
-                  Navigator.pop(
-                    dialogContext,
-                  );
-                },
-                child:
-                    const Text(
-                  'Continue',
-                ),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (!mounted) return;
-
-      // ========================================================
-      // SIGN OUT RECOVERY SESSION
-      // ========================================================
-
-      await Supabase.instance.client.auth
-          .signOut();
-
-      if (!mounted) return;
-
-      // ========================================================
-      // RETURN TO LOGIN
-      // ========================================================
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              const LoginScreen(),
-        ),
-        (route) => false,
-      );
-    } on AuthException catch (e) {
-      debugPrint(
-        'PASSWORD UPDATE AUTH ERROR: ${e.message}',
-      );
-
-      if (!mounted) return;
-
-      _message(
-        e.message,
-      );
-    } catch (e) {
-      debugPrint(
-        'PASSWORD UPDATE ERROR: $e',
-      );
-
-      if (!mounted) return;
-
-      _message(
-        'Unable to change your password. Please try again.',
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
-    }
-  }
-
-  // ============================================================
-  // PASSWORD FIELD
-  // ============================================================
-
-  Widget _passwordField({
-    required TextEditingController
-        controller,
-    required String label,
-    required bool obscure,
-    required VoidCallback
-        onToggle,
-  }) {
-    return Padding(
-      padding:
-          const EdgeInsets.only(
-        bottom: 14,
-      ),
-      child:
-          TextField(
-        controller:
-            controller,
-        obscureText:
-            obscure,
-        decoration:
-            InputDecoration(
-          labelText:
-              label,
-          prefixIcon:
-              const Icon(
-            Icons.lock_outline,
-          ),
-          suffixIcon:
-              IconButton(
-            icon:
-                Icon(
-              obscure
-                  ? Icons
-                      .visibility_off_outlined
-                  : Icons
-                      .visibility_outlined,
-            ),
-            onPressed:
-                onToggle,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _message(
-    String message,
-  ) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context)
-        .hideCurrentSnackBar();
-
-    ScaffoldMessenger.of(context)
-        .showSnackBar(
-      SnackBar(
-        content:
-            Text(message),
-        behavior:
-            SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _newPasswordController.dispose();
-    _confirmPasswordController.dispose();
-
-    super.dispose();
-  }
-
-  // ============================================================
-  // RESET PASSWORD UI
-  // ============================================================
-
-  @override
-  Widget build(
-    BuildContext context,
-  ) {
-    return Scaffold(
-      appBar:
-          AppBar(
-        automaticallyImplyLeading:
-            false,
-        title:
-            const Text(
-          'Create New Password',
-          style:
-              TextStyle(
-            fontWeight:
-                FontWeight.bold,
-            fontSize:
-                16,
-          ),
-        ),
-      ),
-
-      body:
-          ListView(
-        padding:
-            const EdgeInsets.all(24),
-        children: [
-          const SizedBox(
-            height: 30,
-          ),
-
-          const CircleAvatar(
-            radius: 38,
-            backgroundColor:
-                AppColors.lightGreenBg,
-            child:
-                Icon(
-              Icons.lock_reset_rounded,
-              size: 42,
-              color:
-                  AppColors.primaryGreen,
-            ),
-          ),
-
-          const SizedBox(
-            height: 24,
-          ),
-
-          const Text(
-            'Create a new password',
-            textAlign:
-                TextAlign.center,
-            style:
-                TextStyle(
-              fontSize: 24,
-              fontWeight:
-                  FontWeight.bold,
-            ),
-          ),
-
-          const SizedBox(
-            height: 10,
-          ),
-
-          const Text(
-            'Choose a new password for your TrekCure account.',
-            textAlign:
-                TextAlign.center,
-            style:
-                TextStyle(
-              color:
-                  AppColors.textGrey,
-            ),
-          ),
-
-          const SizedBox(
-            height: 30,
-          ),
-
-          // ==================================================
-          // NEW PASSWORD
-          // ==================================================
-
-          _passwordField(
-            controller:
-                _newPasswordController,
-            label:
-                'New Password',
-            obscure:
-                _hideNewPassword,
-            onToggle:
-                () {
-              setState(
-                () {
-                  _hideNewPassword =
-                      !_hideNewPassword;
-                },
-              );
-            },
-          ),
-
-          // ==================================================
-          // CONFIRM PASSWORD
-          // ==================================================
-
-          _passwordField(
-            controller:
-                _confirmPasswordController,
-            label:
-                'Confirm New Password',
-            obscure:
-                _hideConfirmPassword,
-            onToggle:
-                () {
-              setState(
-                () {
-                  _hideConfirmPassword =
-                      !_hideConfirmPassword;
-                },
-              );
-            },
-          ),
-
-          const SizedBox(
-            height: 10,
-          ),
-
-          const Text(
-            'Password must contain at least 6 characters.',
-            style:
-                TextStyle(
-              fontSize: 12,
-              color:
-                  AppColors.textGrey,
-            ),
-          ),
-
-          const SizedBox(
-            height: 22,
-          ),
-
-          // ==================================================
-          // CHANGE PASSWORD
-          // ==================================================
-
-          SizedBox(
-            width:
-                double.infinity,
-            height:
-                52,
-            child:
-                ElevatedButton(
-              onPressed:
-                  _loading
-                      ? null
-                      : _updatePassword,
-              child:
-                  _loading
-                      ? const SizedBox(
-                          width:
-                              22,
-                          height:
-                              22,
-                          child:
-                              CircularProgressIndicator(
-                            color:
-                                Colors.white,
-                            strokeWidth:
-                                2.5,
-                          ),
-                        )
-                      : const Text(
-                          'Change Password',
-                          style:
-                              TextStyle(
-                            fontWeight:
-                                FontWeight.bold,
-                          ),
-                        ),
             ),
           ),
         ],

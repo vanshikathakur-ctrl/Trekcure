@@ -14,7 +14,9 @@ Future<void> main() async {
   // FIREBASE
   // ============================================================
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   // ============================================================
   // SUPABASE
@@ -22,7 +24,8 @@ Future<void> main() async {
 
   await Supabase.initialize(
     url: 'https://izxxkcepflvtzykefpsn.supabase.co',
-    publishableKey: 'sb_publishable_pVnAWk3j-Kf96x5aeFneAA_znlCSt0w',
+    publishableKey:
+        'sb_publishable_pVnAWk3j-Kf96x5aeFneAA_znlCSt0w',
   );
 
   // ============================================================
@@ -38,11 +41,17 @@ Future<void> main() async {
   runApp(const TrekCureApp());
 }
 
+// ==================================================================
+// TREKCURE APP
+// ==================================================================
+
 class TrekCureApp extends StatelessWidget {
   const TrekCureApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return MaterialApp(
       title: 'TrekCure',
       debugShowCheckedModeBanner: false,
