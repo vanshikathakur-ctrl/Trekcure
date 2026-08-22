@@ -8,7 +8,7 @@ class TrekCureApiService {
   // ============================================================
 
   // FastAPI Blockchain API
-  static const String baseUrl = 'http://192.168.1.104';
+  static const String baseUrl = 'https://trekcure-digital-id.onrender.com';
 
   // FastAPI Weather API
   static const String weatherBaseUrl = 'https://trekcure-weather.onrender.com';
