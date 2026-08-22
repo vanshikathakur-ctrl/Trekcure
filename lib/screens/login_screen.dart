@@ -8,14 +8,37 @@ import '../theme/app_theme.dart';
 import 'home_dashboard_screen.dart';
 import 'registration_page.dart';
 
+// ==================================================================
+// SUPABASE PASSWORD RESET REDIRECT
+// ==================================================================
+//
+// This SAME URL must also be added to:
+// Supabase Dashboard
+// -> Authentication
+// -> URL Configuration
+// -> Redirect URLs
+//
+// And Android must be configured to open this deep link.
+//
+// ==================================================================
+
+const String _passwordResetRedirect =
+    'io.supabase.trekcure://reset-password';
+
+// ==================================================================
+// LOGIN SCREEN
+// ==================================================================
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<LoginScreen> createState() =>
+      _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState
+    extends State<LoginScreen> {
   final TextEditingController _idController =
       TextEditingController();
 
@@ -25,32 +48,34 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
 
-  StreamSubscription<AuthState>? _authSubscription;
+  StreamSubscription<AuthState>?
+      _authSubscription;
 
-  bool _openedResetScreen = false;
-
-  static const String _passwordResetRedirect =
-      'io.supabase.trekcure://reset-password';
+  bool _resetScreenAlreadyOpened = false;
 
   @override
   void initState() {
     super.initState();
-    _listenForPasswordRecovery();
+
+    _startPasswordRecoveryListener();
   }
 
   // ============================================================
   // PASSWORD RECOVERY LISTENER
   // ============================================================
 
-  void _listenForPasswordRecovery() {
+  void _startPasswordRecoveryListener() {
     _authSubscription =
-        Supabase.instance.client.auth.onAuthStateChange.listen(
+        Supabase.instance.client.auth
+            .onAuthStateChange
+            .listen(
       (AuthState data) {
         debugPrint(
-          'SUPABASE AUTH EVENT: ${data.event}',
+          'AUTH EVENT RECEIVED: ${data.event}',
         );
 
-        if (data.event == AuthChangeEvent.passwordRecovery) {
+        if (data.event ==
+            AuthChangeEvent.passwordRecovery) {
           _openResetPasswordScreen();
         }
       },
@@ -58,28 +83,38 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ============================================================
-  // OPEN RESET PASSWORD SCREEN
+  // OPEN RESET SCREEN
   // ============================================================
 
   void _openResetPasswordScreen() {
     if (!mounted) return;
 
-    if (_openedResetScreen) return;
+    if (_resetScreenAlreadyOpened) {
+      return;
+    }
 
-    _openedResetScreen = true;
+    _resetScreenAlreadyOpened =
+        true;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+    WidgetsBinding.instance
+        .addPostFrameCallback(
+      (_) {
+        if (!mounted) return;
 
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const ResetPasswordScreen(),
-        ),
-      ).then((_) {
-        _openedResetScreen = false;
-      });
-    });
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                const ResetPasswordScreen(),
+          ),
+        ).then(
+          (_) {
+            _resetScreenAlreadyOpened =
+                false;
+          },
+        );
+      },
+    );
   }
 
   // ============================================================
@@ -90,7 +125,8 @@ class _LoginScreenState extends State<LoginScreen> {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => const HomeDashboardScreen(),
+        builder: (_) =>
+            const HomeDashboardScreen(),
       ),
     );
   }
@@ -100,8 +136,11 @@ class _LoginScreenState extends State<LoginScreen> {
   // ============================================================
 
   Future<void> _loginUser() async {
-    final String email = _idController.text.trim();
-    final String password = _passwordController.text;
+    final String email =
+        _idController.text.trim();
+
+    final String password =
+        _passwordController.text;
 
     if (email.isEmpty) {
       _showMessage(
@@ -123,7 +162,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final AuthResponse response =
-          await Supabase.instance.client.auth.signInWithPassword(
+          await Supabase.instance.client.auth
+              .signInWithPassword(
         email: email,
         password: password,
       );
@@ -136,7 +176,8 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       final Session? session =
-          Supabase.instance.client.auth.currentSession;
+          Supabase.instance.client.auth
+              .currentSession;
 
       if (session == null) {
         _showMessage(
@@ -154,11 +195,15 @@ class _LoginScreenState extends State<LoginScreen> {
       // ========================================================
 
       try {
-        debugPrint('About to call FCM');
+        debugPrint(
+          'About to call FCM',
+        );
 
         await initializeFcm();
 
-        debugPrint('FCM call finished');
+        debugPrint(
+          'FCM call finished',
+        );
       } catch (e) {
         debugPrint(
           'FCM INITIALIZATION ERROR: $e',
@@ -167,10 +212,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      _showMessage('Login successful!');
+      _showMessage(
+        'Login successful!',
+      );
 
       await Future.delayed(
-        const Duration(milliseconds: 300),
+        const Duration(
+          milliseconds: 300,
+        ),
       );
 
       if (!mounted) return;
@@ -178,7 +227,8 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => const HomeDashboardScreen(),
+          builder: (_) =>
+              const HomeDashboardScreen(),
         ),
       );
     } on AuthException catch (e) {
@@ -188,7 +238,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      _showMessage(e.message);
+      _showMessage(
+        e.message,
+      );
     } catch (e) {
       debugPrint(
         'LOGIN ERROR: $e',
@@ -216,7 +268,8 @@ class _LoginScreenState extends State<LoginScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => const ForgotPasswordScreen(),
+        builder: (_) =>
+            const ForgotPasswordScreen(),
       ),
     );
   }
@@ -225,16 +278,21 @@ class _LoginScreenState extends State<LoginScreen> {
   // MESSAGE
   // ============================================================
 
-  void _showMessage(String message) {
+  void _showMessage(
+    String message,
+  ) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
         .hideCurrentSnackBar();
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
       SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
+        content:
+            Text(message),
+        behavior:
+            SnackBarBehavior.floating,
       ),
     );
   }
@@ -250,49 +308,67 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ============================================================
-  // LOGIN SCREEN
+  // LOGIN UI
   // ============================================================
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
+          padding:
+              const EdgeInsets.symmetric(
             horizontal: 24,
             vertical: 16,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child:
+              Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.center,
             children: [
-              const SizedBox(height: 20),
+              const SizedBox(
+                height: 20,
+              ),
 
               // ==================================================
               // TREKCURE LOGO
               // ==================================================
 
               RichText(
-                text: const TextSpan(
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textDark,
+                text:
+                    const TextSpan(
+                  style:
+                      TextStyle(
+                    fontSize:
+                        26,
+                    fontWeight:
+                        FontWeight.bold,
+                    color:
+                        AppColors.textDark,
                   ),
                   children: [
                     TextSpan(
-                      text: 'Trek',
+                      text:
+                          'Trek',
                     ),
                     TextSpan(
-                      text: 'Cure',
-                      style: TextStyle(
-                        color: AppColors.primaryGreen,
+                      text:
+                          'Cure',
+                      style:
+                          TextStyle(
+                        color:
+                            AppColors.primaryGreen,
                       ),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(
+                height: 24,
+              ),
 
               // ==================================================
               // WELCOME
@@ -300,37 +376,56 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const Text(
                 'Welcome Back!',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+                style:
+                    TextStyle(
+                  fontSize:
+                      20,
+                  fontWeight:
+                      FontWeight.bold,
                 ),
               ),
 
-              const SizedBox(height: 6),
+              const SizedBox(
+                height: 6,
+              ),
 
               const Text(
                 'Login to continue your journey',
-                style: TextStyle(
-                  color: AppColors.textGrey,
+                style:
+                    TextStyle(
+                  color:
+                      AppColors.textGrey,
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(
+                height: 32,
+              ),
 
               // ==================================================
               // TREKKING IMAGE
               // ==================================================
 
               ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 160,
-                  child: Image.asset(
+                borderRadius:
+                    BorderRadius.circular(
+                  20,
+                ),
+                child:
+                    SizedBox(
+                  width:
+                      double.infinity,
+                  height:
+                      160,
+                  child:
+                      Image.asset(
                     'asset/images/login_travel.jpeg',
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    errorBuilder: (
+                    fit:
+                        BoxFit.cover,
+                    alignment:
+                        Alignment.center,
+                    errorBuilder:
+                        (
                       context,
                       error,
                       stackTrace,
@@ -340,23 +435,33 @@ class _LoginScreenState extends State<LoginScreen> {
                       );
 
                       return Container(
-                        color: Colors.grey.shade300,
-                        alignment: Alignment.center,
-                        child: const Column(
+                        color:
+                            Colors.grey.shade300,
+                        alignment:
+                            Alignment.center,
+                        child:
+                            const Column(
                           mainAxisAlignment:
                               MainAxisAlignment.center,
                           children: [
                             Icon(
                               Icons
                                   .image_not_supported_outlined,
-                              size: 40,
-                              color: Colors.grey,
+                              size:
+                                  40,
+                              color:
+                                  Colors.grey,
                             ),
-                            SizedBox(height: 8),
+                            SizedBox(
+                              height:
+                                  8,
+                            ),
                             Text(
                               'Image could not be loaded',
-                              style: TextStyle(
-                                color: Colors.grey,
+                              style:
+                                  TextStyle(
+                                color:
+                                    Colors.grey,
                               ),
                             ),
                           ],
@@ -367,50 +472,71 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              const SizedBox(height: 28),
+              const SizedBox(
+                height: 28,
+              ),
 
               // ==================================================
               // EMAIL
               // ==================================================
 
               TextField(
-                controller: _idController,
+                controller:
+                    _idController,
                 keyboardType:
                     TextInputType.emailAddress,
-                autocorrect: false,
-                decoration: const InputDecoration(
-                  hintText: 'Email / Mobile Number',
-                  prefixIcon: Icon(
+                autocorrect:
+                    false,
+                decoration:
+                    const InputDecoration(
+                  hintText:
+                      'Email / Mobile Number',
+                  prefixIcon:
+                      Icon(
                     Icons.email_outlined,
                   ),
                 ),
               ),
 
-              const SizedBox(height: 14),
+              const SizedBox(
+                height: 14,
+              ),
 
               // ==================================================
               // PASSWORD
               // ==================================================
 
               TextField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  hintText: 'Password',
-                  prefixIcon: const Icon(
+                controller:
+                    _passwordController,
+                obscureText:
+                    _obscurePassword,
+                decoration:
+                    InputDecoration(
+                  hintText:
+                      'Password',
+                  prefixIcon:
+                      const Icon(
                     Icons.lock_outline,
                   ),
-                  suffixIcon: IconButton(
-                    icon: Icon(
+                  suffixIcon:
+                      IconButton(
+                    icon:
+                        Icon(
                       _obscurePassword
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
+                          ? Icons
+                              .visibility_off_outlined
+                          : Icons
+                              .visibility_outlined,
                     ),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword =
-                            !_obscurePassword;
-                      });
+                    onPressed:
+                        () {
+                      setState(
+                        () {
+                          _obscurePassword =
+                              !_obscurePassword;
+                        },
+                      );
                     },
                   ),
                 ),
@@ -421,66 +547,93 @@ class _LoginScreenState extends State<LoginScreen> {
               // ==================================================
 
               Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: _forgotPassword,
-                  child: const Text(
+                alignment:
+                    Alignment.centerRight,
+                child:
+                    TextButton(
+                  onPressed:
+                      _forgotPassword,
+                  child:
+                      const Text(
                     'Forgot Password?',
-                    style: TextStyle(
-                      color: AppColors.primaryGreen,
+                    style:
+                        TextStyle(
+                      color:
+                          AppColors.primaryGreen,
                     ),
                   ),
                 ),
               ),
 
-              const SizedBox(height: 8),
+              const SizedBox(
+                height: 8,
+              ),
 
               // ==================================================
-              // LOGIN
+              // LOGIN BUTTON
               // ==================================================
 
               SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
+                width:
+                    double.infinity,
+                height:
+                    52,
+                child:
+                    ElevatedButton(
                   onPressed:
-                      _isLoading ? null : _loginUser,
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child:
-                              CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2.5,
-                          ),
-                        )
-                      : const Text(
-                          'Login',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                      _isLoading
+                          ? null
+                          : _loginUser,
+                  child:
+                      _isLoading
+                          ? const SizedBox(
+                              width:
+                                  22,
+                              height:
+                                  22,
+                              child:
+                                  CircularProgressIndicator(
+                                color:
+                                    Colors.white,
+                                strokeWidth:
+                                    2.5,
+                              ),
+                            )
+                          : const Text(
+                              'Login',
+                              style:
+                                  TextStyle(
+                                fontWeight:
+                                    FontWeight.bold,
+                              ),
+                            ),
                 ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(
+                height: 16,
+              ),
 
               const Text(
                 'OR',
-                style: TextStyle(
-                  color: AppColors.textGrey,
+                style:
+                    TextStyle(
+                  color:
+                      AppColors.textGrey,
                 ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(
+                height: 16,
+              ),
 
               // ==================================================
               // CREATE ACCOUNT
               // ==================================================
 
               OutlinedButton(
-                onPressed: () {
+                onPressed:
+                    () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -489,42 +642,61 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   );
                 },
-                style: OutlinedButton.styleFrom(
+                style:
+                    OutlinedButton.styleFrom(
                   minimumSize:
-                      const Size.fromHeight(52),
-                  side: const BorderSide(
-                    color: AppColors.primaryGreen,
+                      const Size.fromHeight(
+                    52,
                   ),
-                  shape: RoundedRectangleBorder(
+                  side:
+                      const BorderSide(
+                    color:
+                        AppColors.primaryGreen,
+                  ),
+                  shape:
+                      RoundedRectangleBorder(
                     borderRadius:
-                        BorderRadius.circular(12),
+                        BorderRadius.circular(
+                      12,
+                    ),
                   ),
                 ),
-                child: const Text(
+                child:
+                    const Text(
                   'Create New Account',
-                  style: TextStyle(
-                    color: AppColors.primaryGreen,
+                  style:
+                      TextStyle(
+                    color:
+                        AppColors.primaryGreen,
                   ),
                 ),
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(
+                height: 12,
+              ),
 
               // ==================================================
               // GUEST
               // ==================================================
 
               TextButton(
-                onPressed: _goHome,
-                child: const Text(
+                onPressed:
+                    _goHome,
+                child:
+                    const Text(
                   'Continue as Guest',
-                  style: TextStyle(
-                    color: AppColors.textGrey,
+                  style:
+                      TextStyle(
+                    color:
+                        AppColors.textGrey,
                   ),
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(
+                height: 20,
+              ),
             ],
           ),
         ),
@@ -537,17 +709,22 @@ class _LoginScreenState extends State<LoginScreen> {
 // FORGOT PASSWORD SCREEN
 // ==================================================================
 
-class ForgotPasswordScreen extends StatefulWidget {
-  const ForgotPasswordScreen({super.key});
+class ForgotPasswordScreen
+    extends StatefulWidget {
+  const ForgotPasswordScreen({
+    super.key,
+  });
 
   @override
-  State<ForgotPasswordScreen> createState() =>
-      _ForgotPasswordScreenState();
+  State<ForgotPasswordScreen>
+      createState() =>
+          _ForgotPasswordScreenState();
 }
 
 class _ForgotPasswordScreenState
     extends State<ForgotPasswordScreen> {
-  final TextEditingController _emailController =
+  final TextEditingController
+      _emailController =
       TextEditingController();
 
   bool _loading = false;
@@ -587,43 +764,62 @@ class _ForgotPasswordScreenState
           .resetPasswordForEmail(
         email,
         redirectTo:
-            _LoginScreenState
-                ._passwordResetRedirect,
+            _passwordResetRedirect,
       );
 
       debugPrint(
-        'PASSWORD RESET REQUEST SENT',
+        'PASSWORD RESET EMAIL REQUEST COMPLETED',
       );
 
       if (!mounted) return;
 
+      // ========================================================
+      // SHOW CONFIRMATION
+      // ========================================================
+
       await showDialog(
         context: context,
-        builder: (context) {
+        barrierDismissible: false,
+        builder:
+            (dialogContext) {
           return AlertDialog(
-            title: const Row(
+            title:
+                const Row(
               children: [
                 Icon(
-                  Icons.mark_email_read_outlined,
-                  color: AppColors.primaryGreen,
+                  Icons
+                      .mark_email_read_outlined,
+                  color:
+                      AppColors
+                          .primaryGreen,
                 ),
-                SizedBox(width: 10),
+                SizedBox(
+                  width: 10,
+                ),
                 Expanded(
-                  child: Text(
-                    'Check your email',
+                  child:
+                      Text(
+                    'Reset link sent',
                   ),
                 ),
               ],
             ),
-            content: Text(
-              'A password reset link has been sent to $email.\n\nOpen the email and tap the reset link. TrekCure will open and allow you to create a new password.',
+            content:
+                Text(
+              'A password reset link has been sent to:\n\n$email\n\nOpen your email and tap the reset link. TrekCure will open the password-change screen.',
             ),
             actions: [
               ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
+                onPressed:
+                    () {
+                  Navigator.pop(
+                    dialogContext,
+                  );
                 },
-                child: const Text('OK'),
+                child:
+                    const Text(
+                  'OK',
+                ),
               ),
             ],
           );
@@ -632,7 +828,9 @@ class _ForgotPasswordScreenState
 
       if (!mounted) return;
 
-      Navigator.pop(context);
+      Navigator.pop(
+        context,
+      );
     } on AuthException catch (e) {
       debugPrint(
         'PASSWORD RESET AUTH ERROR: ${e.message}',
@@ -640,7 +838,9 @@ class _ForgotPasswordScreenState
 
       if (!mounted) return;
 
-      _message(e.message);
+      _message(
+        e.message,
+      );
     } catch (e) {
       debugPrint(
         'PASSWORD RESET ERROR: $e',
@@ -660,13 +860,19 @@ class _ForgotPasswordScreenState
     }
   }
 
-  void _message(String message) {
+  void _message(
+    String message,
+  ) {
     if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+        .hideCurrentSnackBar();
 
     ScaffoldMessenger.of(context)
         .showSnackBar(
       SnackBar(
-        content: Text(message),
+        content:
+            Text(message),
         behavior:
             SnackBarBehavior.floating,
       ),
@@ -680,27 +886,39 @@ class _ForgotPasswordScreenState
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
+      appBar:
+          AppBar(
+        title:
+            const Text(
           'Forgot Password',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
+          style:
+              TextStyle(
+            fontWeight:
+                FontWeight.bold,
+            fontSize:
+                16,
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
+      body:
+          ListView(
+        padding:
+            const EdgeInsets.all(24),
         children: [
-          const SizedBox(height: 30),
+          const SizedBox(
+            height: 30,
+          ),
 
           const CircleAvatar(
             radius: 38,
             backgroundColor:
                 AppColors.lightGreenBg,
-            child: Icon(
+            child:
+                Icon(
               Icons.lock_reset_rounded,
               size: 42,
               color:
@@ -708,36 +926,50 @@ class _ForgotPasswordScreenState
             ),
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(
+            height: 24,
+          ),
 
           const Text(
             'Reset your password',
-            textAlign: TextAlign.center,
-            style: TextStyle(
+            textAlign:
+                TextAlign.center,
+            style:
+                TextStyle(
               fontSize: 24,
-              fontWeight: FontWeight.bold,
+              fontWeight:
+                  FontWeight.bold,
             ),
           ),
 
-          const SizedBox(height: 10),
+          const SizedBox(
+            height: 10,
+          ),
 
           const Text(
             'Enter the email address associated with your TrekCure account. We will send you a secure password reset link.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.textGrey,
+            textAlign:
+                TextAlign.center,
+            style:
+                TextStyle(
+              color:
+                  AppColors.textGrey,
             ),
           ),
 
-          const SizedBox(height: 30),
+          const SizedBox(
+            height: 30,
+          ),
 
           TextField(
             controller:
                 _emailController,
             keyboardType:
                 TextInputType.emailAddress,
-            autocorrect: false,
-            decoration: const InputDecoration(
+            autocorrect:
+                false,
+            decoration:
+                const InputDecoration(
               labelText:
                   'Email Address',
               hintText:
@@ -749,43 +981,54 @@ class _ForgotPasswordScreenState
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(
+            height: 20,
+          ),
 
           SizedBox(
             height: 52,
-            child: ElevatedButton(
+            child:
+                ElevatedButton(
               onPressed:
                   _loading
                       ? null
                       : _sendResetEmail,
-              child: _loading
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child:
-                          CircularProgressIndicator(
-                        color:
-                            Colors.white,
-                        strokeWidth: 2.5,
-                      ),
-                    )
-                  : const Text(
-                      'Send Reset Link',
-                      style: TextStyle(
-                        fontWeight:
-                            FontWeight.bold,
-                      ),
-                    ),
+              child:
+                  _loading
+                      ? const SizedBox(
+                          width:
+                              22,
+                          height:
+                              22,
+                          child:
+                              CircularProgressIndicator(
+                            color:
+                                Colors.white,
+                            strokeWidth:
+                                2.5,
+                          ),
+                        )
+                      : const Text(
+                          'Send Reset Link',
+                          style:
+                              TextStyle(
+                            fontWeight:
+                                FontWeight.bold,
+                          ),
+                        ),
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(
+            height: 20,
+          ),
 
           const Text(
-            'After opening the reset link from your email, TrekCure will open the password-change screen.',
+            'The reset email contains a secure link. After opening it, TrekCure will allow you to create a new password.',
             textAlign:
                 TextAlign.center,
-            style: TextStyle(
+            style:
+                TextStyle(
               fontSize: 12,
               color:
                   AppColors.textGrey,
@@ -825,6 +1068,7 @@ class _ResetPasswordScreenState
 
   bool _hideNewPassword = true;
   bool _hideConfirmPassword = true;
+
   bool _loading = false;
 
   // ============================================================
@@ -852,6 +1096,13 @@ class _ResetPasswordScreenState
       return;
     }
 
+    if (confirmPassword.isEmpty) {
+      _message(
+        'Please confirm your new password.',
+      );
+      return;
+    }
+
     if (newPassword !=
         confirmPassword) {
       _message(
@@ -859,6 +1110,10 @@ class _ResetPasswordScreenState
       );
       return;
     }
+
+    // ==========================================================
+    // VERIFY THAT THE RECOVERY SESSION EXISTS
+    // ==========================================================
 
     final Session? session =
         Supabase.instance.client.auth
@@ -877,50 +1132,71 @@ class _ResetPasswordScreenState
 
     try {
       debugPrint(
-        'UPDATING PASSWORD...',
+        'UPDATING PASSWORD IN SUPABASE AUTH...',
       );
+
+      // ========================================================
+      // THIS ACTUALLY CHANGES THE PASSWORD
+      // ========================================================
 
       await Supabase.instance.client.auth
           .updateUser(
         UserAttributes(
-          password: newPassword,
+          password:
+              newPassword,
         ),
       );
 
       debugPrint(
-        'PASSWORD UPDATE SUCCESSFUL',
+        'PASSWORD WAS UPDATED SUCCESSFULLY',
       );
 
       if (!mounted) return;
 
+      // ========================================================
+      // SUCCESS MESSAGE
+      // ========================================================
+
       await showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) {
+        builder:
+            (dialogContext) {
           return AlertDialog(
-            title: const Row(
+            title:
+                const Row(
               children: [
                 Icon(
                   Icons.check_circle,
                   color:
-                      AppColors.primaryGreen,
+                      AppColors
+                          .primaryGreen,
                 ),
-                SizedBox(width: 10),
+                SizedBox(
+                  width: 10,
+                ),
                 Expanded(
                   child:
-                      Text('Password changed'),
+                      Text(
+                    'Password changed',
+                  ),
                 ),
               ],
             ),
-            content: const Text(
-              'Your TrekCure password has been changed successfully. You can now log in with your new password.',
+            content:
+                const Text(
+              'Your TrekCure password has been changed successfully. You can now log in using your new password.',
             ),
             actions: [
               ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
+                onPressed:
+                    () {
+                  Navigator.pop(
+                    dialogContext,
+                  );
                 },
-                child: const Text(
+                child:
+                    const Text(
                   'Continue',
                 ),
               ),
@@ -931,15 +1207,24 @@ class _ResetPasswordScreenState
 
       if (!mounted) return;
 
+      // ========================================================
+      // SIGN OUT RECOVERY SESSION
+      // ========================================================
+
       await Supabase.instance.client.auth
           .signOut();
 
       if (!mounted) return;
 
+      // ========================================================
+      // RETURN TO LOGIN
+      // ========================================================
+
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (_) => const LoginScreen(),
+          builder: (_) =>
+              const LoginScreen(),
         ),
         (route) => false,
       );
@@ -950,7 +1235,9 @@ class _ResetPasswordScreenState
 
       if (!mounted) return;
 
-      _message(e.message);
+      _message(
+        e.message,
+      );
     } catch (e) {
       debugPrint(
         'PASSWORD UPDATE ERROR: $e',
@@ -975,47 +1262,63 @@ class _ResetPasswordScreenState
   // ============================================================
 
   Widget _passwordField({
-    required TextEditingController controller,
+    required TextEditingController
+        controller,
     required String label,
     required bool obscure,
-    required VoidCallback onToggle,
+    required VoidCallback
+        onToggle,
   }) {
     return Padding(
       padding:
-          const EdgeInsets.only(bottom: 14),
-      child: TextField(
-        controller: controller,
-        obscureText: obscure,
+          const EdgeInsets.only(
+        bottom: 14,
+      ),
+      child:
+          TextField(
+        controller:
+            controller,
+        obscureText:
+            obscure,
         decoration:
             InputDecoration(
-          labelText: label,
+          labelText:
+              label,
           prefixIcon:
               const Icon(
             Icons.lock_outline,
           ),
           suffixIcon:
               IconButton(
-            icon: Icon(
+            icon:
+                Icon(
               obscure
                   ? Icons
                       .visibility_off_outlined
                   : Icons
                       .visibility_outlined,
             ),
-            onPressed: onToggle,
+            onPressed:
+                onToggle,
           ),
         ),
       ),
     );
   }
 
-  void _message(String message) {
+  void _message(
+    String message,
+  ) {
     if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+        .hideCurrentSnackBar();
 
     ScaffoldMessenger.of(context)
         .showSnackBar(
       SnackBar(
-        content: Text(message),
+        content:
+            Text(message),
         behavior:
             SnackBarBehavior.floating,
       ),
@@ -1030,22 +1333,34 @@ class _ResetPasswordScreenState
     super.dispose();
   }
 
+  // ============================================================
+  // RESET PASSWORD UI
+  // ============================================================
+
   @override
   Widget build(
     BuildContext context,
   ) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
+      appBar:
+          AppBar(
+        automaticallyImplyLeading:
+            false,
+        title:
+            const Text(
           'Create New Password',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
+          style:
+              TextStyle(
+            fontWeight:
+                FontWeight.bold,
+            fontSize:
+                16,
           ),
         ),
       ),
 
-      body: ListView(
+      body:
+          ListView(
         padding:
             const EdgeInsets.all(24),
         children: [
@@ -1057,7 +1372,8 @@ class _ResetPasswordScreenState
             radius: 38,
             backgroundColor:
                 AppColors.lightGreenBg,
-            child: Icon(
+            child:
+                Icon(
               Icons.lock_reset_rounded,
               size: 42,
               color:
@@ -1073,9 +1389,11 @@ class _ResetPasswordScreenState
             'Create a new password',
             textAlign:
                 TextAlign.center,
-            style: TextStyle(
+            style:
+                TextStyle(
               fontSize: 24,
-              fontWeight: FontWeight.bold,
+              fontWeight:
+                  FontWeight.bold,
             ),
           ),
 
@@ -1087,7 +1405,8 @@ class _ResetPasswordScreenState
             'Choose a new password for your TrekCure account.',
             textAlign:
                 TextAlign.center,
-            style: TextStyle(
+            style:
+                TextStyle(
               color:
                   AppColors.textGrey,
             ),
@@ -1097,6 +1416,10 @@ class _ResetPasswordScreenState
             height: 30,
           ),
 
+          // ==================================================
+          // NEW PASSWORD
+          // ==================================================
+
           _passwordField(
             controller:
                 _newPasswordController,
@@ -1104,13 +1427,20 @@ class _ResetPasswordScreenState
                 'New Password',
             obscure:
                 _hideNewPassword,
-            onToggle: () {
-              setState(() {
-                _hideNewPassword =
-                    !_hideNewPassword;
-              });
+            onToggle:
+                () {
+              setState(
+                () {
+                  _hideNewPassword =
+                      !_hideNewPassword;
+                },
+              );
             },
           ),
+
+          // ==================================================
+          // CONFIRM PASSWORD
+          // ==================================================
 
           _passwordField(
             controller:
@@ -1119,11 +1449,14 @@ class _ResetPasswordScreenState
                 'Confirm New Password',
             obscure:
                 _hideConfirmPassword,
-            onToggle: () {
-              setState(() {
-                _hideConfirmPassword =
-                    !_hideConfirmPassword;
-              });
+            onToggle:
+                () {
+              setState(
+                () {
+                  _hideConfirmPassword =
+                      !_hideConfirmPassword;
+                },
+              );
             },
           ),
 
@@ -1133,7 +1466,8 @@ class _ResetPasswordScreenState
 
           const Text(
             'Password must contain at least 6 characters.',
-            style: TextStyle(
+            style:
+                TextStyle(
               fontSize: 12,
               color:
                   AppColors.textGrey,
@@ -1144,9 +1478,15 @@ class _ResetPasswordScreenState
             height: 22,
           ),
 
+          // ==================================================
+          // CHANGE PASSWORD
+          // ==================================================
+
           SizedBox(
-            width: double.infinity,
-            height: 52,
+            width:
+                double.infinity,
+            height:
+                52,
             child:
                 ElevatedButton(
               onPressed:
@@ -1156,13 +1496,16 @@ class _ResetPasswordScreenState
               child:
                   _loading
                       ? const SizedBox(
-                          width: 22,
-                          height: 22,
+                          width:
+                              22,
+                          height:
+                              22,
                           child:
                               CircularProgressIndicator(
                             color:
                                 Colors.white,
-                            strokeWidth: 2.5,
+                            strokeWidth:
+                                2.5,
                           ),
                         )
                       : const Text(
