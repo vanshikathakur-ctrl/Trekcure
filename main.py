@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+import asyncio
 import uuid
 import hashlib
 import json
@@ -47,6 +48,9 @@ app = FastAPI(
 weather_cache = {}
 
 CACHE_DURATION = 300
+
+# Prevent multiple simultaneous requests to Open-Meteo
+weather_lock = asyncio.Lock()
 
 
 # ============================================================
@@ -127,7 +131,6 @@ async def get_weather(
         round(longitude, 3),
     )
 
-
     current_time = time.time()
 
 
@@ -159,79 +162,261 @@ async def get_weather(
             ]
 
 
-    # --------------------------------------------------------
-    # OPEN-METEO API
-    # --------------------------------------------------------
+    # ========================================================
+    # PREVENT DUPLICATE OPEN-METEO REQUESTS
+    # ========================================================
 
-    weather_url = (
-        "https://api.open-meteo.com/v1/forecast"
-    )
+    async with weather_lock:
+
+        # ----------------------------------------------------
+        # CHECK CACHE AGAIN AFTER ACQUIRING LOCK
+        # ----------------------------------------------------
+
+        current_time = time.time()
+
+        if cache_key in weather_cache:
+
+            cached_data = weather_cache[
+                cache_key
+            ]
+
+            cache_time = cached_data[
+                "timestamp"
+            ]
+
+            if (
+                current_time - cache_time
+                < CACHE_DURATION
+            ):
+
+                print(
+                    "RETURNING CACHED WEATHER DATA AFTER LOCK"
+                )
+
+                return cached_data[
+                    "data"
+                ]
 
 
-    params = {
+        # ----------------------------------------------------
+        # OPEN-METEO API
+        # ----------------------------------------------------
 
-        "latitude":
-            latitude,
-
-        "longitude":
-            longitude,
-
-        "current":
-            (
-                "temperature_2m,"
-                "relative_humidity_2m,"
-                "apparent_temperature,"
-                "precipitation,"
-                "rain,"
-                "weather_code,"
-                "wind_speed_10m"
-            ),
-
-        "timezone":
-            "auto",
-    }
-
-
-    try:
-
-        timeout = httpx.Timeout(
-            15.0,
-            connect=10.0,
+        weather_url = (
+            "https://api.open-meteo.com/v1/forecast"
         )
 
 
-        async with httpx.AsyncClient(
-            timeout=timeout
-        ) as client:
+        params = {
 
-            response = await client.get(
+            "latitude":
+                latitude,
 
-                weather_url,
+            "longitude":
+                longitude,
 
-                params=params,
+            "current":
+                (
+                    "temperature_2m,"
+                    "relative_humidity_2m,"
+                    "apparent_temperature,"
+                    "precipitation,"
+                    "rain,"
+                    "weather_code,"
+                    "wind_speed_10m"
+                ),
 
-                headers={
+            "timezone":
+                "auto",
+        }
 
-                    "User-Agent":
-                        "TrekCure/1.0",
 
-                },
+        try:
 
+            timeout = httpx.Timeout(
+                15.0,
+                connect=10.0,
             )
 
 
-        # ----------------------------------------------------
-        # RATE LIMIT
-        # ----------------------------------------------------
+            async with httpx.AsyncClient(
+                timeout=timeout
+            ) as client:
 
-        if response.status_code == 429:
+                response = await client.get(
+
+                    weather_url,
+
+                    params=params,
+
+                    headers={
+
+                        "User-Agent":
+                            "TrekCure/1.0",
+
+                    },
+
+                )
+
+
+            # ------------------------------------------------
+            # RATE LIMIT
+            # ------------------------------------------------
+
+            if response.status_code == 429:
+
+                print(
+                    "OPEN-METEO RATE LIMIT REACHED"
+                )
+
+                # If old cached data exists,
+                # return it instead of failing.
+
+                if cache_key in weather_cache:
+
+                    print(
+                        "RETURNING OLD CACHED WEATHER DATA"
+                    )
+
+                    return weather_cache[
+                        cache_key
+                    ]["data"]
+
+
+                raise HTTPException(
+
+                    status_code=429,
+
+                    detail=(
+                        "Weather service is temporarily "
+                        "busy. Please try again shortly."
+                    ),
+
+                )
+
+
+            response.raise_for_status()
+
+
+            data = response.json()
+
+
+            current = data.get(
+                "current"
+            )
+
+
+            if current is None:
+
+                raise HTTPException(
+
+                    status_code=500,
+
+                    detail=(
+                        "Weather data was not returned "
+                        "by the weather provider."
+                    ),
+
+                )
+
+
+            # ------------------------------------------------
+            # GET VALUES
+            # ------------------------------------------------
+
+            weather_code = current.get(
+                "weather_code"
+            )
+
+
+            condition = get_weather_condition(
+                weather_code
+            )
+
+
+            weather_data = {
+
+                "temperature":
+                    current.get(
+                        "temperature_2m"
+                    ),
+
+                "humidity":
+                    current.get(
+                        "relative_humidity_2m"
+                    ),
+
+                "feels_like":
+                    current.get(
+                        "apparent_temperature"
+                    ),
+
+                "precipitation":
+                    current.get(
+                        "precipitation"
+                    ),
+
+                "rain":
+                    current.get(
+                        "rain"
+                    ),
+
+                "weather_code":
+                    weather_code,
+
+                "condition":
+                    condition,
+
+                "wind_speed":
+                    current.get(
+                        "wind_speed_10m"
+                    ),
+
+            }
+
+
+            # ------------------------------------------------
+            # SAVE TO CACHE
+            # ------------------------------------------------
+
+            weather_cache[
+                cache_key
+            ] = {
+
+                "timestamp":
+                    current_time,
+
+                "data":
+                    weather_data,
+
+            }
+
 
             print(
-                "OPEN-METEO RATE LIMIT REACHED"
+                "WEATHER DATA FETCHED SUCCESSFULLY"
             )
 
-            # If old cached data exists,
-            # return it instead of failing.
+
+            return weather_data
+
+
+        except HTTPException:
+
+            raise
+
+
+        except httpx.HTTPStatusError as e:
+
+            print(
+                "WEATHER HTTP ERROR:"
+            )
+
+            print(
+                str(e)
+            )
+
+
+            # Return old cached data if available
 
             if cache_key in weather_cache:
 
@@ -246,199 +431,83 @@ async def get_weather(
 
             raise HTTPException(
 
-                status_code=429,
+                status_code=502,
 
                 detail=(
-                    "Weather service is temporarily "
-                    "busy. Please try again shortly."
+                    "Weather provider returned an error."
                 ),
 
             )
 
 
-        response.raise_for_status()
+        except httpx.RequestError as e:
+
+            print(
+                "WEATHER CONNECTION ERROR:"
+            )
+
+            print(
+                str(e)
+            )
 
 
-        data = response.json()
+            # Return old cached data if available
+
+            if cache_key in weather_cache:
+
+                print(
+                    "RETURNING OLD CACHED WEATHER DATA"
+                )
+
+                return weather_cache[
+                    cache_key
+                ]["data"]
 
 
-        current = data.get(
-            "current"
-        )
+            raise HTTPException(
+
+                status_code=503,
+
+                detail=(
+                    "Unable to connect to the weather service."
+                ),
+
+            )
 
 
-        if current is None:
+        except Exception as e:
+
+            print(
+                "WEATHER SERVER ERROR:"
+            )
+
+            print(
+                str(e)
+            )
+
+
+            # Return old cached data if available
+
+            if cache_key in weather_cache:
+
+                print(
+                    "RETURNING OLD CACHED WEATHER DATA"
+                )
+
+                return weather_cache[
+                    cache_key
+                ]["data"]
+
 
             raise HTTPException(
 
                 status_code=500,
 
                 detail=(
-                    "Weather data was not returned "
-                    "by the weather provider."
+                    "Failed to process weather data."
                 ),
 
             )
-
-
-        # ----------------------------------------------------
-        # GET VALUES
-        # ----------------------------------------------------
-
-        weather_code = current.get(
-            "weather_code"
-        )
-
-
-        condition = get_weather_condition(
-            weather_code
-        )
-
-
-        weather_data = {
-
-            "temperature":
-                current.get(
-                    "temperature_2m"
-                ),
-
-            "humidity":
-                current.get(
-                    "relative_humidity_2m"
-                ),
-
-            "feels_like":
-                current.get(
-                    "apparent_temperature"
-                ),
-
-            "precipitation":
-                current.get(
-                    "precipitation"
-                ),
-
-            "rain":
-                current.get(
-                    "rain"
-                ),
-
-            "weather_code":
-                weather_code,
-
-            "condition":
-                condition,
-
-            "wind_speed":
-                current.get(
-                    "wind_speed_10m"
-                ),
-
-        }
-
-
-        # ----------------------------------------------------
-        # SAVE TO CACHE
-        # ----------------------------------------------------
-
-        weather_cache[
-            cache_key
-        ] = {
-
-            "timestamp":
-                current_time,
-
-            "data":
-                weather_data,
-
-        }
-
-
-        print(
-            "WEATHER DATA FETCHED SUCCESSFULLY"
-        )
-
-
-        return weather_data
-
-
-    except HTTPException:
-
-        raise
-
-
-    except httpx.HTTPStatusError as e:
-
-        print(
-            "WEATHER HTTP ERROR:"
-        )
-
-        print(
-            str(e)
-        )
-
-
-        raise HTTPException(
-
-            status_code=502,
-
-            detail=(
-                "Weather provider returned an error."
-            ),
-
-        )
-
-
-    except httpx.RequestError as e:
-
-        print(
-            "WEATHER CONNECTION ERROR:"
-        )
-
-        print(
-            str(e)
-        )
-
-
-        # Return old cached data if available
-
-        if cache_key in weather_cache:
-
-            return weather_cache[
-                cache_key
-            ]["data"]
-
-
-        raise HTTPException(
-
-            status_code=503,
-
-            detail=(
-                "Unable to connect to the weather service."
-            ),
-
-        )
-
-
-    except Exception as e:
-
-        print(
-            "WEATHER SERVER ERROR:"
-        )
-
-        print(
-            str(e)
-        )
-
-
-        raise HTTPException(
-
-            status_code=500,
-
-            detail=(
-                "Failed to process weather data."
-            ),
-
-        )
 
 
 # ============================================================
