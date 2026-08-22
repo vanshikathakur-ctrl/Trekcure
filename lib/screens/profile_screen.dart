@@ -9,6 +9,7 @@ import '../widgets/bottom_nav.dart';
 import 'digital_id_screen.dart';
 import 'emergency_contacts_screen.dart';
 import 'login_screen.dart';
+import 'verify_digital_id_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -312,7 +313,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ],
             ),
-          ),
+          ), 
+                _tile(
+  Icons.qr_code_scanner,
+  'Scan Digital ID',
+  () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const VerifyDigitalIdScreen(),
+      ),
+    );
+  },
+),
 
           const SizedBox(height: 10),
 

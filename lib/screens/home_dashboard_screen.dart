@@ -25,6 +25,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   String _userLocationText = 'Locating...';
   String _nearbyAlertLocation = 'your current trail';
 
+  // Notification Badge State
+  int _unreadNotifications = 2;
+
   // Dynamic Weather State
   double? _temperature;
   double? _humidity;
@@ -203,8 +206,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         final Map<String, dynamic>? address = data['address'];
 
         if (address != null) {
-          final String localAlertSpot =
-              address['tourism'] ??
+          final String localAlertSpot = address['tourism'] ??
               address['historic'] ??
               address['suburb'] ??
               address['neighbourhood'] ??
@@ -213,8 +215,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               address['city_district'] ??
               'Central Trail';
 
-          final String cityOrArea =
-              address['city'] ??
+          final String cityOrArea = address['city'] ??
               address['town'] ??
               address['village'] ??
               address['suburb'] ??
@@ -295,7 +296,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   // ============================================================
-  // BUILD METHOD (TREKCURE LOGO IN APP BAR)
+  // BUILD METHOD
   // ============================================================
   @override
   Widget build(BuildContext context) {
@@ -305,9 +306,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         toolbarHeight: 68,
         title: Row(
           children: [
-            // ======================================================
-            // TREKCURE LOGO INSTEAD OF 3-LINES MENU ICON
-            // ======================================================
             RichText(
               text: const TextSpan(
                 style: TextStyle(
@@ -328,7 +326,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               ),
             ),
             const SizedBox(width: 14),
-            // User greeting & Dynamic Location
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,31 +375,41 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   color: AppColors.textDark,
                   size: 28,
                 ),
-                Positioned(
-                  right: -2,
-                  top: -2,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: AppColors.dangerRed,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Text(
-                      '2',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+                if (_unreadNotifications > 0)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: AppColors.dangerRed,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '$_unreadNotifications',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-            ),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+              );
+
+              // Mark notifications as read when returning to dashboard
+              if (mounted) {
+                setState(() {
+                  _unreadNotifications = 0;
+                });
+              }
+            },
           ),
           const SizedBox(width: 8),
         ],
@@ -415,16 +422,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ======================================================
-              // 1. SAFETY STATUS CARD
-              // ======================================================
+              // 1. Safety Status Card
               AppCard(
                 color: AppColors.lightGreenBg,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 8,
-                    horizontal: 4,
-                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                   child: Row(
                     children: [
                       Container(
@@ -433,11 +435,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                           color: AppColors.primaryGreen,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
-                          Icons.shield,
-                          color: Colors.white,
-                          size: 28,
-                        ),
+                        child: const Icon(Icons.shield, color: Colors.white, size: 28),
                       ),
                       const SizedBox(width: 16),
                       const Expanded(
@@ -478,9 +476,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
               const SizedBox(height: 18),
 
-              // ======================================================
-              // 2. DYNAMIC WEATHER & DYNAMIC CROWD ROW
-              // ======================================================
+              // 2. Weather & Crowd Row
               IntrinsicHeight(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -495,22 +491,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Icon(
-                                    _weatherIcon(),
-                                    color: AppColors.infoBlue,
-                                    size: 30,
-                                  ),
+                                  Icon(_weatherIcon(), color: AppColors.infoBlue, size: 30),
                                   IconButton(
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(),
                                     iconSize: 22,
                                     tooltip: 'Refresh',
-                                    onPressed: _weatherLoading
-                                        ? null
-                                        : _loadDashboardData,
+                                    onPressed: _weatherLoading ? null : _loadDashboardData,
                                     icon: const Icon(
                                       Icons.refresh,
                                       color: AppColors.textGrey,
@@ -542,11 +531,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                               const SizedBox(height: 12),
                               Row(
                                 children: [
-                                  const Icon(
-                                    Icons.water_drop_outlined,
-                                    size: 16,
-                                    color: AppColors.infoBlue,
-                                  ),
+                                  const Icon(Icons.water_drop_outlined, size: 16, color: AppColors.infoBlue),
                                   const SizedBox(width: 4),
                                   Text(
                                     _weatherLoading
@@ -563,11 +548,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                               const SizedBox(height: 4),
                               Row(
                                 children: [
-                                  const Icon(
-                                    Icons.air,
-                                    size: 16,
-                                    color: AppColors.textGrey,
-                                  ),
+                                  const Icon(Icons.air, size: 16, color: AppColors.textGrey),
                                   const SizedBox(width: 4),
                                   Text(
                                     _weatherLoading
@@ -609,11 +590,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                               const SizedBox(height: 10),
                               Row(
                                 children: [
-                                  Icon(
-                                    Icons.groups,
-                                    color: _crowdColor,
-                                    size: 28,
-                                  ),
+                                  Icon(Icons.groups, color: _crowdColor, size: 28),
                                   const SizedBox(width: 8),
                                   Text(
                                     _crowdLevel,
@@ -674,16 +651,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
               const SizedBox(height: 18),
 
-              // ======================================================
-              // 3. DYNAMIC TRAVEL ALERT CARD
-              // ======================================================
+              // 3. Travel Alert Card
               AppCard(
                 color: AppColors.dangerBgLight,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 8,
-                    horizontal: 6,
-                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -747,16 +719,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
               const SizedBox(height: 18),
 
-              // ======================================================
-              // 4. OFFLINE MESH PEER RELAY CARD
-              // ======================================================
+              // 4. Offline Mesh Active Card
               AppCard(
                 color: const Color(0xFFF0FDF4),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 8,
-                    horizontal: 6,
-                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [

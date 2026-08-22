@@ -109,7 +109,6 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
             ? Map<String, dynamic>.from(data['credential'])
             : null;
 
-        // Hash is returned at the TOP LEVEL by FastAPI
         _credentialHash = data['hash']?.toString();
 
         _loading = false;
@@ -129,19 +128,11 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
   // ============================================================
 
   String _createQrData() {
-    final issuedDate = _credential?['issued_date'] ?? '';
-    final validUntil = _credential?['valid_until'] ?? '';
-    final hash = _credentialHash ?? '';
-
     final qrData = {
       'app': 'TrekCure',
       'type': 'Digital Travel ID',
-      'tourist_id': _touristId ?? '',
       'user_id': _userId,
-      'name': _userName,
-      'issued_date': issuedDate,
-      'valid_until': validUntil,
-      'credential_hash': hash,
+      'credential': _credential,
     };
 
     return jsonEncode(qrData);
@@ -320,6 +311,10 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
 
                 const SizedBox(height: 20),
 
+                // =================================================
+                // QR CODE
+                // =================================================
+
                 Container(
                   height: 190,
                   width: 190,
@@ -379,6 +374,10 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
 
           const SizedBox(height: 16),
 
+          // ======================================================
+          // USER INFORMATION
+          // ======================================================
+
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -408,6 +407,10 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
 
           const SizedBox(height: 16),
 
+          // ======================================================
+          // SECURITY INFORMATION
+          // ======================================================
+
           AppCard(
             color: AppColors.infoBgLight,
             child: Row(
@@ -424,7 +427,9 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                     children: [
                       const Text(
                         'Blockchain Credential',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       const Text(

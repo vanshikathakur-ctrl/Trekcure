@@ -43,6 +43,9 @@ dependencies:
   # Permissions
   permission_handler: ^12.0.0
 
+  #Scanner
+  mobile_scanner: ^7.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
