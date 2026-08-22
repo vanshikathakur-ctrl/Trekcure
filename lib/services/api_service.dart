@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // Android Emulator → Windows computer
-  static const String baseUrl = 'http://10.0.2.2:8000';
+  static const String baseUrl = 'https://trekcure-weather.onrender.com';
 
   static Future<Map<String, dynamic>> createDigitalId({
     required String userId,
