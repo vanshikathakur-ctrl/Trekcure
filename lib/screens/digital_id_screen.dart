@@ -5,7 +5,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/app_theme.dart';
-
 import 'package:trekcure/services/trekcure_api_service.dart';
 
 class DigitalIdScreen extends StatefulWidget {
@@ -21,6 +20,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
 
   Map<String, dynamic>? _credential;
   String? _touristId;
+  String? _credentialHash;
 
   String _userName = '';
   String _userId = '';
@@ -41,6 +41,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
       _error = null;
       _credential = null;
       _touristId = null;
+      _credentialHash = null;
     });
 
     try {
@@ -67,7 +68,8 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
       if (metadata != null) {
         final metadataName = metadata['full_name'] ?? metadata['name'];
 
-        if (metadataName != null && metadataName.toString().trim().isNotEmpty) {
+        if (metadataName != null &&
+            metadataName.toString().trim().isNotEmpty) {
           name = metadataName.toString().trim();
         }
       }
@@ -107,6 +109,9 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
             ? Map<String, dynamic>.from(data['credential'])
             : null;
 
+        // Hash is returned at the TOP LEVEL by FastAPI
+        _credentialHash = data['hash']?.toString();
+
         _loading = false;
       });
     } catch (e) {
@@ -114,7 +119,6 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
 
       setState(() {
         _error = 'Could not create Digital ID.\n\n$e';
-
         _loading = false;
       });
     }
@@ -126,10 +130,8 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
 
   String _createQrData() {
     final issuedDate = _credential?['issued_date'] ?? '';
-
     final validUntil = _credential?['valid_until'] ?? '';
-
-    final hash = _credential?['credential_hash'] ?? _credential?['hash'] ?? '';
+    final hash = _credentialHash ?? '';
 
     final qrData = {
       'app': 'TrekCure',
@@ -154,12 +156,13 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: const BackButton(),
-
         title: const Text(
           'Digital Travel ID',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
         ),
-
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -167,8 +170,10 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
           ),
         ],
       ),
-
-      body: Padding(padding: const EdgeInsets.all(16), child: _buildBody()),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: _buildBody(),
+      ),
     );
   }
 
@@ -183,9 +188,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             CircularProgressIndicator(),
-
             SizedBox(height: 16),
-
             Text(
               'Creating Digital Travel ID...',
               style: TextStyle(color: AppColors.textGrey),
@@ -200,7 +203,9 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
     }
 
     if (_touristId == null || _credential == null) {
-      return const Center(child: Text('Digital ID data is unavailable.'));
+      return const Center(
+        child: Text('Digital ID data is unavailable.'),
+      );
     }
 
     return _buildDigitalId();
@@ -214,27 +219,30 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
-
         children: [
-          const Icon(Icons.error_outline, color: AppColors.dangerRed, size: 50),
-
+          const Icon(
+            Icons.error_outline,
+            color: AppColors.dangerRed,
+            size: 50,
+          ),
           const SizedBox(height: 12),
-
           const Text(
             'Unable to create Digital ID',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-
           const SizedBox(height: 10),
-
           Text(
             _error ?? 'Unknown error',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.textGrey, fontSize: 12),
+            style: const TextStyle(
+              color: AppColors.textGrey,
+              fontSize: 12,
+            ),
           ),
-
           const SizedBox(height: 20),
-
           ElevatedButton(
             onPressed: _createDigitalId,
             child: const Text('Retry'),
@@ -250,55 +258,43 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
 
   Widget _buildDigitalId() {
     final issuedDate = _credential?['issued_date'] ?? '—';
-
     final validUntil = _credential?['valid_until'] ?? '—';
-
-    final hash = _credential?['credential_hash'] ?? _credential?['hash'] ?? '—';
+    final hash = _credentialHash ?? '—';
 
     return SingleChildScrollView(
       child: Column(
         children: [
-          // ======================================================
-          // DIGITAL ID CARD
-          // ======================================================
-
           Container(
             width: double.infinity,
-
             padding: const EdgeInsets.all(20),
-
             decoration: BoxDecoration(
               color: AppColors.primaryGreen,
               borderRadius: BorderRadius.circular(20),
             ),
-
             child: Column(
               children: [
-                // ------------------------------------------------
-                // HEADER
-                // ------------------------------------------------
-
                 Row(
                   children: const [
                     Text(
                       'Verified Traveler',
-                      style: TextStyle(color: Colors.white70, fontSize: 13),
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
                     ),
-
                     Spacer(),
-
-                    Icon(Icons.check_circle, color: Colors.white, size: 18),
+                    Icon(
+                      Icons.check_circle,
+                      color: Colors.white,
+                      size: 18,
+                    ),
                   ],
                 ),
 
                 const SizedBox(height: 6),
 
-                // ------------------------------------------------
-                // TOURIST ID
-                // ------------------------------------------------
                 Align(
                   alignment: Alignment.centerLeft,
-
                   child: Text(
                     _touristId ?? '—',
                     style: const TextStyle(
@@ -311,43 +307,32 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
 
                 const SizedBox(height: 6),
 
-                // ------------------------------------------------
-                // USER NAME
-                // ------------------------------------------------
                 Align(
                   alignment: Alignment.centerLeft,
-
                   child: Text(
                     _userName,
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
 
                 const SizedBox(height: 20),
 
-                // =================================================
-                // REAL QR CODE
-                // =================================================
                 Container(
                   height: 190,
                   width: 190,
-
                   padding: const EdgeInsets.all(10),
-
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                   ),
-
                   child: QrImageView(
                     data: _createQrData(),
-
                     version: QrVersions.auto,
-
                     size: 170,
-
                     backgroundColor: Colors.white,
-
                     errorCorrectionLevel: QrErrorCorrectLevel.H,
                   ),
                 ),
@@ -356,17 +341,16 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
 
                 const Text(
                   'Scan to verify traveler identity',
-                  style: TextStyle(color: Colors.white70, fontSize: 11),
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
+                  ),
                 ),
 
                 const SizedBox(height: 18),
 
-                // ------------------------------------------------
-                // DATES
-                // ------------------------------------------------
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
                   children: [
                     Flexible(
                       child: Text(
@@ -377,7 +361,6 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                         ),
                       ),
                     ),
-
                     Flexible(
                       child: Text(
                         'Valid till : $validUntil',
@@ -396,25 +379,24 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
 
           const SizedBox(height: 16),
 
-          // ======================================================
-          // USER INFORMATION
-          // ======================================================
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-
               children: [
                 const Text(
                   'Traveler Information',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
                 ),
-
                 const SizedBox(height: 12),
-
-                _InfoRow(icon: Icons.person, label: 'Name', value: _userName),
-
+                _InfoRow(
+                  icon: Icons.person,
+                  label: 'Name',
+                  value: _userName,
+                ),
                 const SizedBox(height: 8),
-
                 _InfoRow(
                   icon: Icons.badge,
                   label: 'Tourist ID',
@@ -426,32 +408,25 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
 
           const SizedBox(height: 16),
 
-          // ======================================================
-          // SECURITY INFORMATION
-          // ======================================================
           AppCard(
             color: AppColors.infoBgLight,
-
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
-
               children: [
-                const Icon(Icons.link, color: AppColors.infoBlue),
-
+                const Icon(
+                  Icons.link,
+                  color: AppColors.infoBlue,
+                ),
                 const SizedBox(width: 10),
-
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-
                     children: [
                       const Text(
                         'Blockchain Credential',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
-
                       const SizedBox(height: 4),
-
                       const Text(
                         'This Digital ID is secured with a SHA-256 credential hash generated by the TrekCure backend.',
                         style: TextStyle(
@@ -459,9 +434,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                           color: AppColors.textGrey,
                         ),
                       ),
-
                       const SizedBox(height: 8),
-
                       Text(
                         hash,
                         maxLines: 2,
@@ -502,19 +475,26 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: AppColors.infoBlue),
-
+        Icon(
+          icon,
+          size: 20,
+          color: AppColors.infoBlue,
+        ),
         const SizedBox(width: 10),
-
         Text(
           '$label: ',
-          style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppColors.textGrey,
+          ),
         ),
-
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ],

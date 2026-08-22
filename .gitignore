@@ -46,3 +46,14 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Environment variables / secrets
+.env
+.env.*
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Local Supabase config
+supabase_config/

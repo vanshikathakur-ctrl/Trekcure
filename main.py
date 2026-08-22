@@ -112,11 +112,10 @@ def create_digital_id(tourist: Tourist):
     # --------------------------------------------------------
 
     if not result.data:
-
-        raise HTTPException(
-            status_code=404,
-            detail="User profile not found in Supabase."
-        )
+     raise HTTPException(
+        status_code=404,
+        detail=f"Profile not found or update was blocked. Supabase response: {result}"
+    )
 
 
     # --------------------------------------------------------
