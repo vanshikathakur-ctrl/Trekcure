@@ -24,13 +24,14 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   String _userName = 'User';
 
   // ============================================================
-  // DYNAMIC LOCATION VARIABLES
+  // DYNAMIC LOCATION
   // ============================================================
 
   String _userLocationText = 'Locating...';
+  String _nearbyAlertLocation = 'your current trail';
 
   // ============================================================
-  // DYNAMIC WEATHER STATE
+  // DYNAMIC WEATHER
   // ============================================================
 
   double? _temperature;
@@ -41,7 +42,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   bool _weatherLoading = true;
 
   // ============================================================
-  // DYNAMIC CROWD STATE
+  // DYNAMIC CROWD
   // ============================================================
 
   String _crowdLevel = 'Loading...';
@@ -51,29 +52,24 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   bool _isCrowdLoading = true;
 
   // ============================================================
-  // OFFLINE MESH STATE
+  // OFFLINE MESH
   // ============================================================
 
   int _nearbyMeshNodes = 0;
   bool _meshRelayActive = false;
 
-  late final MeshService _meshService;
+  final MeshService _meshService = MeshService.instance;
 
   StreamSubscription<int>? _meshNodeSubscription;
-
-  // NEW: Listen for incoming SOS messages
   StreamSubscription<Map<String, dynamic>>? _meshSosSubscription;
 
   @override
   void initState() {
     super.initState();
 
-    _meshService = MeshService.instance;
-
-    _startMesh();
-
     _loadUserName();
     _loadDashboardData();
+    _startMesh();
   }
 
   // ============================================================
@@ -91,10 +87,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         _meshRelayActive = _meshService.isRunning;
       });
 
-      // ----------------------------------------------------------
-      // LISTEN FOR NODE COUNT CHANGES
-      // ----------------------------------------------------------
-
       await _meshNodeSubscription?.cancel();
 
       _meshNodeSubscription =
@@ -108,14 +100,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
         debugPrint('MESH NODE COUNT UPDATED: $nodeCount');
       });
-
-      // ----------------------------------------------------------
-      // LISTEN FOR INCOMING OFFLINE SOS
-      // ----------------------------------------------------------
-
-      debugPrint('================================');
-      debugPrint('STARTING OFFLINE MESH SOS LISTENER...');
-      debugPrint('================================');
 
       await _meshSosSubscription?.cancel();
 
@@ -150,9 +134,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   // SHOW OFFLINE SOS ALERT
   // ============================================================
 
-  void _showOfflineSosAlert(
-    Map<String, dynamic> sosData,
-  ) {
+  void _showOfflineSosAlert(Map<String, dynamic> sosData) {
     if (!mounted) return;
 
     showDialog(
@@ -188,9 +170,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               onPressed: () {
                 Navigator.of(dialogContext).pop();
               },
-              child: const Text(
-                'ACKNOWLEDGE',
-              ),
+              child: const Text('ACKNOWLEDGE'),
             ),
           ],
         );
@@ -227,7 +207,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   // ============================================================
   // UNIFIED DASHBOARD DATA LOADER
-  // LOCATION + WEATHER + CROWD
   // ============================================================
 
   Future<void> _loadDashboardData() async {
@@ -389,13 +368,23 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             data['address'];
 
         if (address != null) {
+          final String localAlertSpot =
+              address['tourism'] ??
+              address['historic'] ??
+              address['suburb'] ??
+              address['neighbourhood'] ??
+              address['road'] ??
+              address['residential'] ??
+              address['city_district'] ??
+              'Central Trail';
+
           final String cityOrArea =
               address['city'] ??
-                  address['town'] ??
-                  address['village'] ??
-                  address['suburb'] ??
-                  address['county'] ??
-                  'Nearby Trail';
+              address['town'] ??
+              address['village'] ??
+              address['suburb'] ??
+              address['county'] ??
+              'Nearby Area';
 
           final String country =
               address['country'] ?? 'India';
@@ -405,6 +394,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           setState(() {
             _userLocationText =
                 '$cityOrArea, $country';
+
+            _nearbyAlertLocation =
+                localAlertSpot;
           });
 
           return;
@@ -417,7 +409,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (!mounted) return;
 
     setState(() {
-      _userLocationText = 'Mumbai, India';
+      _userLocationText = 'Thane, India';
+      _nearbyAlertLocation = 'Central Trail';
     });
   }
 
@@ -429,7 +422,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (!mounted) return;
 
     setState(() {
-      _userLocationText = 'Mumbai, India';
+      _userLocationText = 'Thane, India';
+      _nearbyAlertLocation = 'Central Trail';
 
       _temperature = 28.0;
       _humidity = 75.0;
@@ -439,7 +433,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       _weatherLoading = false;
 
       _crowdLevel = 'Moderate';
-      _crowdPeopleCount = 240;
+      _crowdPeopleCount = 180;
       _crowdColor = AppColors.warningOrange;
       _isCrowdLoading = false;
     });
@@ -465,8 +459,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   IconData _weatherIcon() {
-    final condition =
-        _weatherCondition.toLowerCase();
+    final condition = _weatherCondition.toLowerCase();
 
     if (condition.contains('thunder')) {
       return Icons.thunderstorm;
@@ -506,7 +499,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   // ============================================================
-  // BUILD METHOD
+  // BUILD
   // ============================================================
 
   @override
@@ -514,15 +507,18 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        toolbarHeight: 68,
         title: Row(
           children: [
             const Icon(
               Icons.menu,
               color: AppColors.textDark,
+              size: 28,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment:
                     CrossAxisAlignment.start,
                 children: [
@@ -530,26 +526,30 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     'Hello, $_userName 👋',
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 19,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  const SizedBox(height: 3),
                   Row(
                     children: [
                       const Icon(
                         Icons.location_on,
-                        size: 13,
+                        size: 15,
                         color: AppColors.textGrey,
                       ),
-                      const SizedBox(width: 2),
+                      const SizedBox(width: 3),
                       Expanded(
                         child: Text(
                           _userLocationText,
                           maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          overflow:
+                              TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: 13.5,
                             color: AppColors.textGrey,
+                            fontWeight:
+                                FontWeight.w500,
                           ),
                         ),
                       ),
@@ -568,13 +568,14 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 const Icon(
                   Icons.notifications_none,
                   color: AppColors.textDark,
+                  size: 28,
                 ),
                 Positioned(
                   right: -2,
                   top: -2,
                   child: Container(
                     padding:
-                        const EdgeInsets.all(3),
+                        const EdgeInsets.all(4),
                     decoration: const BoxDecoration(
                       color: AppColors.dangerRed,
                       shape: BoxShape.circle,
@@ -583,23 +584,24 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       '2',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 9,
+                        fontSize: 10,
+                        fontWeight:
+                            FontWeight.bold,
                       ),
                     ),
                   ),
                 ),
               ],
             ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const NotificationsScreen(),
-                ),
-              );
-            },
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    const NotificationsScreen(),
+              ),
+            ),
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: RefreshIndicator(
@@ -610,81 +612,404 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           padding:
               const EdgeInsets.fromLTRB(
             16,
-            4,
+            10,
             16,
-            16,
+            28,
           ),
           child: Column(
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
+
+              // SAFETY STATUS
+
               AppCard(
                 color: AppColors.lightGreenBg,
-                child: Row(
-                  children: [
-                    Container(
-                      padding:
-                          const EdgeInsets.all(10),
-                      decoration:
-                          const BoxDecoration(
-                        color: AppColors.primaryGreen,
-                        shape: BoxShape.circle,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 4,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding:
+                            const EdgeInsets.all(14),
+                        decoration:
+                            const BoxDecoration(
+                          color:
+                              AppColors.primaryGreen,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.shield,
+                          color: Colors.white,
+                          size: 28,
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.shield,
-                        color: Colors.white,
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'You are Safe',
+                              style: TextStyle(
+                                fontWeight:
+                                    FontWeight.bold,
+                                fontSize: 19,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Safety Status: Low Risk',
+                              style: TextStyle(
+                                color:
+                                    AppColors.textGrey,
+                                fontSize: 15,
+                                fontWeight:
+                                    FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Updated just now',
+                              style: TextStyle(
+                                color:
+                                    AppColors.textGrey,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              // WEATHER + CROWD
+
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: AppCard(
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.all(8),
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            mainAxisAlignment:
+                                MainAxisAlignment
+                                    .spaceBetween,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment
+                                        .spaceBetween,
+                                children: [
+                                  Icon(
+                                    _weatherIcon(),
+                                    color:
+                                        AppColors.infoBlue,
+                                    size: 30,
+                                  ),
+                                  IconButton(
+                                    padding:
+                                        EdgeInsets.zero,
+                                    constraints:
+                                        const BoxConstraints(),
+                                    iconSize: 22,
+                                    tooltip: 'Refresh',
+                                    onPressed:
+                                        _weatherLoading
+                                            ? null
+                                            : _loadDashboardData,
+                                    icon: const Icon(
+                                      Icons.refresh,
+                                      color:
+                                          AppColors.textGrey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                _weatherLoading
+                                    ? '--°C'
+                                    : '${_temperature?.round() ?? 28}°C',
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  fontWeight:
+                                      FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                _weatherCondition,
+                                maxLines: 1,
+                                overflow:
+                                    TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color:
+                                      AppColors.textGrey,
+                                  fontSize: 15,
+                                  fontWeight:
+                                      FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                _weatherLoading
+                                    ? 'Humidity: --'
+                                    : 'Humidity: ${_humidity?.round() ?? 75}%',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight:
+                                      FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _weatherLoading
+                                    ? 'Wind: -- km/h'
+                                    : 'Wind: ${_windSpeed?.round() ?? 12} km/h',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight:
+                                      FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
+
                     const SizedBox(width: 14),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'You are Safe',
-                            style: TextStyle(
-                              fontWeight:
-                                  FontWeight.bold,
-                              fontSize: 16,
-                            ),
+
+                    Expanded(
+                      child: AppCard(
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.all(8),
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            mainAxisAlignment:
+                                MainAxisAlignment
+                                    .spaceBetween,
+                            children: [
+                              const Text(
+                                'Crowd Level',
+                                style: TextStyle(
+                                  color:
+                                      AppColors.textGrey,
+                                  fontSize: 15,
+                                  fontWeight:
+                                      FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.groups,
+                                    color: _crowdColor,
+                                    size: 28,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _crowdLevel,
+                                      overflow:
+                                          TextOverflow
+                                              .ellipsis,
+                                      style: TextStyle(
+                                        fontWeight:
+                                            FontWeight.bold,
+                                        color:
+                                            _crowdColor,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _isCrowdLoading
+                                    ? 'Calculating...'
+                                    : '$_crowdPeopleCount people',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight:
+                                      FontWeight.bold,
+                                  color:
+                                      AppColors.textDark,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              GestureDetector(
+                                onTap: () =>
+                                    Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const MapCrowdScreen(),
+                                  ),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Text(
+                                      'View Details',
+                                      style: TextStyle(
+                                        color:
+                                            AppColors
+                                                .primaryGreen,
+                                        fontSize: 14,
+                                        fontWeight:
+                                            FontWeight.bold,
+                                      ),
+                                    ),
+                                    SizedBox(width: 4),
+                                    Icon(
+                                      Icons.arrow_forward_ios,
+                                      size: 13,
+                                      color:
+                                          AppColors
+                                              .primaryGreen,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Safety Status: Low Risk',
-                            style: TextStyle(
-                              color:
-                                  AppColors.textGrey,
-                            ),
-                          ),
-                          Text(
-                            'Updated just now',
-                            style: TextStyle(
-                              color:
-                                  AppColors.textGrey,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 18),
 
-              // WEATHER + CROWD
+              // TRAVEL ALERT
 
-              Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: AppCard(
-                      child: Padding(
+              AppCard(
+                color: AppColors.dangerBgLight,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 6,
+                  ),
+                  child: Row(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        color: AppColors.dangerRed,
+                        size: 28,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Travel Alert',
+                              style: TextStyle(
+                                fontWeight:
+                                    FontWeight.bold,
+                                fontSize: 17,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'High crowd detected near\n'
+                              '$_nearbyAlertLocation. '
+                              'Avoid if possible.',
+                              style: const TextStyle(
+                                fontSize: 14.5,
+                                height: 1.35,
+                                color:
+                                    AppColors.textGrey,
+                                fontWeight:
+                                    FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            GestureDetector(
+                              onTap: () =>
+                                  Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const MapCrowdScreen(),
+                                ),
+                              ),
+                              child: const Text(
+                                'View on Map >',
+                                style: TextStyle(
+                                  color:
+                                      AppColors.dangerRed,
+                                  fontSize: 14,
+                                  fontWeight:
+                                      FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              // OFFLINE MESH
+
+              AppCard(
+                color: const Color(0xFFF0FDF4),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 6,
+                  ),
+                  child: Row(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.center,
+                    children: [
+                      Container(
                         padding:
-                            const EdgeInsets.all(4),
+                            const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryGreen
+                              .withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.sensors,
+                          color:
+                              AppColors.primaryGreen,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
                         child: Column(
                           crossAxisAlignment:
                               CrossAxisAlignment.start,
@@ -694,306 +1019,52 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                                   MainAxisAlignment
                                       .spaceBetween,
                               children: [
-                                Icon(
-                                  _weatherIcon(),
-                                  color:
-                                      AppColors.infoBlue,
+                                const Expanded(
+                                  child: Text(
+                                    'Offline Mesh Active',
+                                    maxLines: 1,
+                                    overflow:
+                                        TextOverflow
+                                            .ellipsis,
+                                    style: TextStyle(
+                                      fontWeight:
+                                          FontWeight.bold,
+                                      fontSize: 16,
+                                      color:
+                                          AppColors.textDark,
+                                    ),
+                                  ),
                                 ),
-                                IconButton(
-                                  padding:
-                                      EdgeInsets.zero,
-                                  constraints:
-                                      const BoxConstraints(),
-                                  iconSize: 18,
-                                  tooltip: 'Refresh',
-                                  onPressed:
-                                      _weatherLoading
-                                          ? null
-                                          : _loadDashboardData,
-                                  icon: const Icon(
-                                    Icons.refresh,
+                                const SizedBox(width: 8),
+                                Text(
+                                  '● $_nearbyMeshNodes Nodes',
+                                  style: const TextStyle(
+                                    fontWeight:
+                                        FontWeight.bold,
+                                    fontSize: 13,
                                     color:
-                                        AppColors.textGrey,
+                                        AppColors.primaryGreen,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 5),
                             Text(
-                              _weatherLoading
-                                  ? '--°C'
-                                  : '${_temperature?.round() ?? 28}°C',
+                              _meshRelayActive
+                                  ? 'Mesh active. Listening for nearby TrekCure devices and distress signals.'
+                                  : 'Starting offline mesh...',
                               style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight:
-                                    FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _weatherCondition,
-                              maxLines: 1,
-                              overflow:
-                                  TextOverflow.ellipsis,
-                              style: const TextStyle(
+                                fontSize: 13.5,
+                                height: 1.35,
                                 color:
                                     AppColors.textGrey,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              _weatherLoading
-                                  ? 'Humidity: --'
-                                  : 'Humidity: ${_humidity?.round() ?? 75}%',
-                              style: const TextStyle(
-                                fontSize: 12,
-                              ),
-                            ),
-                            Text(
-                              _weatherLoading
-                                  ? 'Wind: -- km/h'
-                                  : 'Wind: ${_windSpeed?.round() ?? 12} km/h',
-                              style: const TextStyle(
-                                fontSize: 12,
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
+                    ],
                   ),
-
-                  const SizedBox(width: 12),
-
-                  Expanded(
-                    child: AppCard(
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Crowd Level',
-                            style: TextStyle(
-                              color:
-                                  AppColors.textGrey,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.groups,
-                                color: _crowdColor,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  _crowdLevel,
-                                  overflow:
-                                      TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontWeight:
-                                        FontWeight.bold,
-                                    color: _crowdColor,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _isCrowdLoading
-                                ? 'Calculating...'
-                                : '$_crowdPeopleCount people',
-                            style: const TextStyle(
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const MapCrowdScreen(),
-                                ),
-                              );
-                            },
-                            child: const Text(
-                              'View Details',
-                              style: TextStyle(
-                                color:
-                                    AppColors.primaryGreen,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 14),
-
-              // TRAVEL ALERT
-
-              AppCard(
-                color: AppColors.dangerBgLight,
-                child: Row(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.warning_amber_rounded,
-                      color: AppColors.dangerRed,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          const Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment
-                                    .spaceBetween,
-                            children: [
-                              Text(
-                                'Travel Alert',
-                                style: TextStyle(
-                                  fontWeight:
-                                      FontWeight.bold,
-                                ),
-                              ),
-                              Icon(
-                                Icons.chevron_right,
-                                size: 18,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          const Text(
-                            'High crowd detected near\nGateway of India. Avoid if possible.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color:
-                                  AppColors.textGrey,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const MapCrowdScreen(),
-                                ),
-                              );
-                            },
-                            child: const Text(
-                              'View on Map >',
-                              style: TextStyle(
-                                color:
-                                    AppColors.dangerRed,
-                                fontSize: 12,
-                                fontWeight:
-                                    FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // =================================================
-              // OFFLINE MESH
-              // =================================================
-
-              AppCard(
-                color: const Color(0xFFF0FDF4),
-                child: Row(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding:
-                          const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryGreen
-                            .withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.sensors,
-                        color:
-                            AppColors.primaryGreen,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Expanded(
-                                child: Text(
-                                  'Offline Mesh Active',
-                                  maxLines: 1,
-                                  overflow:
-                                      TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontWeight:
-                                        FontWeight.bold,
-                                    fontSize: 14,
-                                    color:
-                                        AppColors.textDark,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '● $_nearbyMeshNodes Nodes',
-                                style: const TextStyle(
-                                  fontWeight:
-                                      FontWeight.bold,
-                                  fontSize: 11,
-                                  color:
-                                      AppColors.primaryGreen,
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 3),
-
-                          Text(
-                            _meshRelayActive
-                                ? 'Mesh active. Listening for nearby TrekCure devices and distress signals.'
-                                : 'Starting offline mesh...',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color:
-                                  AppColors.textGrey,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ],
