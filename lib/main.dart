@@ -5,18 +5,35 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
+import 'services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // ============================================================
+  // FIREBASE
+  // ============================================================
+
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // ============================================================
+  // SUPABASE
+  // ============================================================
 
   await Supabase.initialize(
     url: 'https://izxxkcepflvtzykefpsn.supabase.co',
     publishableKey: 'sb_publishable_pVnAWk3j-Kf96x5aeFneAA_znlCSt0w',
   );
+
+  // ============================================================
+  // LOCAL NOTIFICATIONS
+  // ============================================================
+
+  await NotificationService.instance.initialize();
+
+  // ============================================================
+  // START APP
+  // ============================================================
 
   runApp(const TrekCureApp());
 }

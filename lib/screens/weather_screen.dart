@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 
 import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
@@ -13,8 +14,28 @@ class WeatherScreen extends StatefulWidget {
 }
 
 class _WeatherScreenState extends State<WeatherScreen> {
+  // ============================================================
+  // GEOCODING
+  // ============================================================
+
+  final Geocoding _geocoding = Geocoding();
+
+  // ============================================================
+  // STATE
+  // ============================================================
+
   bool _loading = true;
   String? _error;
+
+  // ============================================================
+  // CURRENT LOCATION
+  // ============================================================
+
+  String _currentLocation = 'Current Location';
+
+  // ============================================================
+  // WEATHER DATA
+  // ============================================================
 
   double _temperature = 0;
   double _humidity = 0;
@@ -28,6 +49,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
   String _message = '';
 
   List<Map<String, dynamic>> _forecast = [];
+
+  // ============================================================
+  // INIT
+  // ============================================================
 
   @override
   void initState() {
@@ -46,11 +71,19 @@ class _WeatherScreenState extends State<WeatherScreen> {
     });
 
     try {
+      // ==========================================================
+      // 1. CHECK LOCATION SERVICES
+      // ==========================================================
+
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
       if (!serviceEnabled) {
         throw Exception('Location services are disabled.');
       }
+
+      // ==========================================================
+      // 2. CHECK LOCATION PERMISSION
+      // ==========================================================
 
       LocationPermission permission = await Geolocator.checkPermission();
 
@@ -66,11 +99,50 @@ class _WeatherScreenState extends State<WeatherScreen> {
         throw Exception('Location permission is permanently denied.');
       }
 
+      // ==========================================================
+      // 3. GET CURRENT GPS LOCATION
+      // ==========================================================
+
       final Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
         ),
       );
+
+      // ==========================================================
+      // 4. CONVERT GPS COORDINATES TO LOCATION NAME
+      // ==========================================================
+
+      String locationName = 'Current Location';
+
+      try {
+        final List<Placemark> placemarks = await _geocoding
+            .placemarkFromCoordinates(position.latitude, position.longitude);
+
+        if (placemarks.isNotEmpty) {
+          final Placemark place = placemarks.first;
+
+          final String? city = place.locality;
+          final String? state = place.administrativeArea;
+          final String? country = place.country;
+
+          final List<String> parts = [
+            if (city != null && city.isNotEmpty) city,
+            if (state != null && state.isNotEmpty) state,
+            if (country != null && country.isNotEmpty) country,
+          ];
+
+          if (parts.isNotEmpty) {
+            locationName = parts.join(', ');
+          }
+        }
+      } catch (_) {
+        locationName = 'Current Location';
+      }
+
+      // ==========================================================
+      // 5. GET WEATHER FROM TREKCURE WEATHER API
+      // ==========================================================
 
       final weather = await TrekCureApiService.getWeather(
         latitude: position.latitude,
@@ -79,7 +151,13 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
       if (!mounted) return;
 
+      // ==========================================================
+      // 6. UPDATE SCREEN
+      // ==========================================================
+
       setState(() {
+        _currentLocation = locationName;
+
         _temperature = (weather['temperature'] ?? 0).toDouble();
 
         _humidity = (weather['humidity'] ?? 0).toDouble();
@@ -180,7 +258,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   String _formatTime(String time) {
     try {
-      final dateTime = DateTime.parse(time);
+      final DateTime dateTime = DateTime.parse(time);
 
       int hour = dateTime.hour;
 
@@ -223,27 +301,38 @@ class _WeatherScreenState extends State<WeatherScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
+
         title: Row(
           children: [
             const Icon(Icons.wb_cloudy_outlined),
+
             const SizedBox(width: 8),
-            const Column(
+
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+
               children: [
-                Text(
+                const Text(
                   'Weather',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
+
                 Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.location_on,
                       size: 12,
                       color: AppColors.textGrey,
                     ),
+
+                    const SizedBox(width: 2),
+
                     Text(
-                      'Current Location',
-                      style: TextStyle(fontSize: 11, color: AppColors.textGrey),
+                      _currentLocation,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textGrey,
+                      ),
                     ),
                   ],
                 ),
@@ -251,11 +340,13 @@ class _WeatherScreenState extends State<WeatherScreen> {
             ),
           ],
         ),
+
         actions: [
           IconButton(
             onPressed: _loading ? null : _loadWeather,
             icon: const Icon(Icons.refresh),
           ),
+
           const SizedBox(width: 8),
         ],
       ),
@@ -278,22 +369,30 @@ class _WeatherScreenState extends State<WeatherScreen> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
+
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+
           children: [
             const Icon(Icons.cloud_off, size: 60, color: AppColors.textGrey),
+
             const SizedBox(height: 16),
+
             const Text(
               'Unable to load weather',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
+
             const SizedBox(height: 8),
+
             Text(
               _error ?? 'Unknown error',
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppColors.textGrey),
             ),
+
             const SizedBox(height: 20),
+
             ElevatedButton(
               onPressed: _loadWeather,
               child: const Text('Try Again'),
@@ -311,9 +410,15 @@ class _WeatherScreenState extends State<WeatherScreen> {
   Widget _buildWeatherContent() {
     return ListView(
       padding: const EdgeInsets.all(16),
+
       children: [
+        // ========================================================
+        // CURRENT WEATHER CARD
+        // ========================================================
+
         AppCard(
           color: const Color(0xFFDCEAF7),
+
           child: Column(
             children: [
               Icon(
@@ -321,7 +426,9 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 size: 40,
                 color: AppColors.infoBlue,
               ),
+
               const SizedBox(height: 8),
+
               Text(
                 '${_temperature.round()}°C',
                 style: const TextStyle(
@@ -329,22 +436,28 @@ class _WeatherScreenState extends State<WeatherScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+
               Text(
                 _weatherDescription(_weatherCode),
                 style: const TextStyle(color: AppColors.textGrey),
               ),
+
               const SizedBox(height: 14),
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+
                 children: [
                   _StatColumn(
                     label: 'Humidity',
                     value: '${_humidity.round()}%',
                   ),
+
                   _StatColumn(
                     label: 'Wind',
                     value: '${_windSpeed.round()} km/h',
                   ),
+
                   _StatColumn(
                     label: 'Feels Like',
                     value: '${_feelsLike.round()}°C',
@@ -357,6 +470,9 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
         const SizedBox(height: 20),
 
+        // ========================================================
+        // HOURLY FORECAST TITLE
+        // ========================================================
         const Text(
           "Today's Forecast",
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
@@ -364,11 +480,16 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
         const SizedBox(height: 10),
 
+        // ========================================================
+        // HOURLY FORECAST
+        // ========================================================
         AppCard(
           padding: const EdgeInsets.symmetric(vertical: 4),
+
           child: _forecast.isEmpty
               ? const Padding(
                   padding: EdgeInsets.all(20),
+
                   child: Text(
                     'Forecast unavailable',
                     style: TextStyle(color: AppColors.textGrey),
@@ -387,7 +508,9 @@ class _WeatherScreenState extends State<WeatherScreen> {
                         _weatherIcon(code),
                         color: AppColors.infoBlue,
                       ),
+
                       title: Text(time),
+
                       trailing: Text(
                         '${temp.round()}°C',
                         style: const TextStyle(fontWeight: FontWeight.bold),
@@ -399,34 +522,49 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
         const SizedBox(height: 16),
 
+        // ========================================================
+        // WEATHER STATUS
+        // ========================================================
         AppCard(
           color: _hazard ? AppColors.dangerBgLight : AppColors.infoBgLight,
+
           child: Row(
             children: [
               Icon(
                 _hazard ? Icons.warning_amber : Icons.info_outline,
+
                 color: _hazard ? AppColors.dangerRed : AppColors.infoBlue,
               ),
+
               const SizedBox(width: 10),
+
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+
                   children: [
                     Text(
                       _hazard ? 'Weather Alert' : 'Weather Status',
+
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
+
                     const SizedBox(height: 2),
+
                     Text(
                       _message,
+
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.textGrey,
                       ),
                     ),
+
                     const SizedBox(height: 4),
+
                     Text(
                       'Risk: $_riskLevel',
+
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -459,6 +597,7 @@ class _StatColumn extends StatelessWidget {
     return Column(
       children: [
         Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+
         Text(
           label,
           style: const TextStyle(fontSize: 11, color: AppColors.textGrey),
