@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "991959032874",
+    "project_id": "trekcure-910c1",
+    "storage_bucket": "trekcure-910c1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:991959032874:android:b0ddfb5b1e72c052b30f53",
+        "android_client_info": {
+          "package_name": "com.example.trekcure"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBcrRz3JCYz-_eRkHq5ewkLGFLf2MiFFrQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
