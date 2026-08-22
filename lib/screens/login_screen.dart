@@ -187,7 +187,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     'asset/images/login_travel.jpeg',
                     fit: BoxFit.cover,
                     alignment: Alignment.center,
-
                     // Shows an obvious message if Flutter
                     // cannot load the image.
                     errorBuilder: (context, error, stackTrace) {

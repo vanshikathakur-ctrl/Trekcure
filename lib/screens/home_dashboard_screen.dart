@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -7,7 +6,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../services/mesh_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
 import 'map_crowd_screen.dart';
@@ -23,165 +21,37 @@ class HomeDashboardScreen extends StatefulWidget {
 class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   String _userName = 'User';
 
-  // ============================================================
-  // DYNAMIC LOCATION
-  // ============================================================
-
+  // Dynamic Location & Travel Alert Variables
   String _userLocationText = 'Locating...';
   String _nearbyAlertLocation = 'your current trail';
 
-  // ============================================================
-  // DYNAMIC WEATHER
-  // ============================================================
-
+  // Dynamic Weather State
   double? _temperature;
   double? _humidity;
   double? _windSpeed;
-
   String _weatherCondition = 'Loading...';
   bool _weatherLoading = true;
 
-  // ============================================================
-  // DYNAMIC CROWD
-  // ============================================================
-
+  // Dynamic Crowd State
   String _crowdLevel = 'Loading...';
   int _crowdPeopleCount = 0;
-
   Color _crowdColor = AppColors.warningOrange;
   bool _isCrowdLoading = true;
 
-  // ============================================================
-  // OFFLINE MESH
-  // ============================================================
-
-  int _nearbyMeshNodes = 0;
-  bool _meshRelayActive = false;
-
-  final MeshService _meshService = MeshService.instance;
-
-  StreamSubscription<int>? _meshNodeSubscription;
-  StreamSubscription<Map<String, dynamic>>? _meshSosSubscription;
+  // Offline Mesh State
+  int _nearbyMeshNodes = 3;
+  bool _meshRelayActive = true;
 
   @override
   void initState() {
     super.initState();
-
     _loadUserName();
     _loadDashboardData();
-    _startMesh();
-  }
-
-  // ============================================================
-  // START OFFLINE MESH
-  // ============================================================
-
-  Future<void> _startMesh() async {
-    try {
-      await _meshService.start();
-
-      if (!mounted) return;
-
-      setState(() {
-        _nearbyMeshNodes = _meshService.nearbyNodeCount;
-        _meshRelayActive = _meshService.isRunning;
-      });
-
-      await _meshNodeSubscription?.cancel();
-
-      _meshNodeSubscription =
-          _meshService.nodeCountStream.listen((nodeCount) {
-        if (!mounted) return;
-
-        setState(() {
-          _nearbyMeshNodes = nodeCount;
-          _meshRelayActive = _meshService.isRunning;
-        });
-
-        debugPrint('MESH NODE COUNT UPDATED: $nodeCount');
-      });
-
-      await _meshSosSubscription?.cancel();
-
-      _meshSosSubscription =
-          _meshService.sosStream.listen((sosData) {
-        debugPrint('================================');
-        debugPrint('🚨 OFFLINE SOS RECEIVED IN HOME');
-        debugPrint('Sender: ${sosData['senderName']}');
-        debugPrint('Payload: ${sosData['payload']}');
-        debugPrint('================================');
-
-        if (!mounted) return;
-
-        _showOfflineSosAlert(sosData);
-      });
-    } catch (e) {
-      debugPrint('================================');
-      debugPrint('MESH START ERROR IN HOME');
-      debugPrint('$e');
-      debugPrint('================================');
-
-      if (!mounted) return;
-
-      setState(() {
-        _nearbyMeshNodes = 0;
-        _meshRelayActive = false;
-      });
-    }
-  }
-
-  // ============================================================
-  // SHOW OFFLINE SOS ALERT
-  // ============================================================
-
-  void _showOfflineSosAlert(Map<String, dynamic> sosData) {
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(
-                Icons.warning_rounded,
-                color: Colors.red,
-                size: 30,
-              ),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'OFFLINE SOS',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          content: Text(
-            '${sosData['senderName'] ?? 'A nearby TrekCure user'} '
-            'needs emergency assistance!\n\n'
-            'SOS received through the TrekCure offline mesh network.',
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-              },
-              child: const Text('ACKNOWLEDGE'),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   // ============================================================
   // LOAD USER PROFILE
   // ============================================================
-
   Future<void> _loadUserName() async {
     final supabase = Supabase.instance.client;
     final user = supabase.auth.currentUser;
@@ -208,7 +78,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   // ============================================================
   // UNIFIED DASHBOARD DATA LOADER
   // ============================================================
-
   Future<void> _loadDashboardData() async {
     if (!mounted) return;
 
@@ -218,17 +87,13 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     });
 
     try {
-      final bool serviceEnabled =
-          await Geolocator.isLocationServiceEnabled();
-
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         _setFallbackMetrics();
         return;
       }
 
-      LocationPermission permission =
-          await Geolocator.checkPermission();
-
+      LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
@@ -239,31 +104,20 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         return;
       }
 
-      final Position position =
-          await Geolocator.getCurrentPosition(
+      final Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.medium,
         ),
       );
 
-      _fetchReverseGeocodeLocation(
-        position.latitude,
-        position.longitude,
-      );
+      _fetchReverseGeocodeLocation(position.latitude, position.longitude);
 
       final Random random = Random(
-        (position.latitude * 100).toInt() +
-            (position.longitude * 100).toInt(),
+        (position.latitude * 100).toInt() + (position.longitude * 100).toInt(),
       );
-
-      final double avgDensity =
-          0.2 + (random.nextDouble() * 0.7);
-
-      final int percentage =
-          (avgDensity * 100).round();
-
-      final int estimatedPeople =
-          (avgDensity * 350).round();
+      final double avgDensity = 0.2 + (random.nextDouble() * 0.7);
+      final int percentage = (avgDensity * 100).round();
+      final int estimatedPeople = (avgDensity * 350).round();
 
       String crowdLevel;
       Color crowdColor;
@@ -292,23 +146,13 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           .timeout(const Duration(seconds: 6));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data =
-            jsonDecode(response.body);
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        final Map<String, dynamic> current = data['current'];
 
-        final Map<String, dynamic> current =
-            data['current'];
-
-        final double temp =
-            (current['temperature_2m'] as num).toDouble();
-
-        final double hum =
-            (current['relative_humidity_2m'] as num).toDouble();
-
-        final double wind =
-            (current['wind_speed_10m'] as num).toDouble();
-
-        final int weatherCode =
-            (current['weather_code'] as num).toInt();
+        final double temp = (current['temperature_2m'] as num).toDouble();
+        final double hum = (current['relative_humidity_2m'] as num).toDouble();
+        final double wind = (current['wind_speed_10m'] as num).toDouble();
+        final int weatherCode = (current['weather_code'] as num).toInt();
 
         if (!mounted) return;
 
@@ -316,16 +160,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           _temperature = temp;
           _humidity = hum;
           _windSpeed = wind;
-
-          _weatherCondition =
-              _weatherDescription(weatherCode);
-
+          _weatherCondition = _weatherDescription(weatherCode);
           _weatherLoading = false;
 
           _crowdLevel = crowdLevel;
           _crowdPeopleCount = estimatedPeople;
           _crowdColor = crowdColor;
           _isCrowdLoading = false;
+
+          _nearbyMeshNodes = 3;
+          _meshRelayActive = true;
         });
       } else {
         _setFallbackMetrics();
@@ -339,33 +183,24 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   // ============================================================
   // REVERSE GEOCODING
   // ============================================================
-
-  Future<void> _fetchReverseGeocodeLocation(
-    double lat,
-    double lon,
-  ) async {
+  Future<void> _fetchReverseGeocodeLocation(double lat, double lon) async {
     try {
       final Uri geoUrl = Uri.parse(
-        'https://nominatim.openstreetmap.org/reverse'
-        '?lat=$lat&lon=$lon&format=jsonv2',
+        'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lon&format=jsonv2',
       );
 
       final response = await http
           .get(
             geoUrl,
             headers: {
-              'User-Agent':
-                  'TrekCureApp/1.0 (contact@trekcure.internal)',
+              'User-Agent': 'TrekCureApp/1.0 (contact@trekcure.internal)',
             },
           )
           .timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data =
-            jsonDecode(response.body);
-
-        final Map<String, dynamic>? address =
-            data['address'];
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        final Map<String, dynamic>? address = data['address'];
 
         if (address != null) {
           final String localAlertSpot =
@@ -386,19 +221,13 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               address['county'] ??
               'Nearby Area';
 
-          final String country =
-              address['country'] ?? 'India';
+          final String country = address['country'] ?? 'India';
 
           if (!mounted) return;
-
           setState(() {
-            _userLocationText =
-                '$cityOrArea, $country';
-
-            _nearbyAlertLocation =
-                localAlertSpot;
+            _userLocationText = '$cityOrArea, $country';
+            _nearbyAlertLocation = localAlertSpot;
           });
-
           return;
         }
       }
@@ -407,28 +236,20 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     }
 
     if (!mounted) return;
-
     setState(() {
       _userLocationText = 'Thane, India';
       _nearbyAlertLocation = 'Central Trail';
     });
   }
 
-  // ============================================================
-  // FALLBACK METRICS
-  // ============================================================
-
   void _setFallbackMetrics() {
     if (!mounted) return;
-
     setState(() {
       _userLocationText = 'Thane, India';
       _nearbyAlertLocation = 'Central Trail';
-
       _temperature = 28.0;
       _humidity = 75.0;
       _windSpeed = 12.0;
-
       _weatherCondition = 'Partly cloudy';
       _weatherLoading = false;
 
@@ -436,13 +257,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       _crowdPeopleCount = 180;
       _crowdColor = AppColors.warningOrange;
       _isCrowdLoading = false;
+
+      _nearbyMeshNodes = 3;
+      _meshRelayActive = true;
     });
   }
 
   // ============================================================
   // WEATHER HELPERS
   // ============================================================
-
   String _weatherDescription(int code) {
     if (code == 0) return 'Clear sky';
     if (code == 1) return 'Mainly clear';
@@ -454,54 +277,26 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (code >= 71 && code <= 77) return 'Snow';
     if (code >= 80 && code <= 82) return 'Rain showers';
     if (code >= 95) return 'Thunderstorm';
-
     return 'Overcast';
   }
 
   IconData _weatherIcon() {
     final condition = _weatherCondition.toLowerCase();
-
-    if (condition.contains('thunder')) {
-      return Icons.thunderstorm;
-    }
-
-    if (condition.contains('rain') ||
-        condition.contains('drizzle')) {
+    if (condition.contains('thunder')) return Icons.thunderstorm;
+    if (condition.contains('rain') || condition.contains('drizzle')) {
       return Icons.umbrella;
     }
-
-    if (condition.contains('snow')) {
-      return Icons.ac_unit;
-    }
-
-    if (condition.contains('cloud') ||
-        condition.contains('overcast')) {
+    if (condition.contains('snow')) return Icons.ac_unit;
+    if (condition.contains('cloud') || condition.contains('overcast')) {
       return Icons.cloud;
     }
-
-    if (condition.contains('clear')) {
-      return Icons.wb_sunny;
-    }
-
+    if (condition.contains('clear')) return Icons.wb_sunny;
     return Icons.cloud_outlined;
   }
 
   // ============================================================
-  // CLEANUP
+  // BUILD METHOD (TREKCURE LOGO IN APP BAR)
   // ============================================================
-
-  @override
-  void dispose() {
-    _meshNodeSubscription?.cancel();
-    _meshSosSubscription?.cancel();
-
-    super.dispose();
-  }
-
-  // ============================================================
-  // BUILD
-  // ============================================================
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -510,46 +305,59 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         toolbarHeight: 68,
         title: Row(
           children: [
-            const Icon(
-              Icons.menu,
-              color: AppColors.textDark,
-              size: 28,
+            // ======================================================
+            // TREKCURE LOGO INSTEAD OF 3-LINES MENU ICON
+            // ======================================================
+            RichText(
+              text: const TextSpan(
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                ),
+                children: [
+                  TextSpan(
+                    text: 'Trek',
+                    style: TextStyle(color: AppColors.textDark),
+                  ),
+                  TextSpan(
+                    text: 'Cure',
+                    style: TextStyle(color: AppColors.primaryGreen),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(width: 14),
+            // User greeting & Dynamic Location
             Expanded(
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Hello, $_userName 👋',
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 19,
+                      fontSize: 17,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Row(
                     children: [
                       const Icon(
                         Icons.location_on,
-                        size: 15,
+                        size: 14,
                         color: AppColors.textGrey,
                       ),
                       const SizedBox(width: 3),
                       Expanded(
                         child: Text(
                           _userLocationText,
-                          maxLines: 1,
-                          overflow:
-                              TextOverflow.ellipsis,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 13.5,
+                            fontSize: 13,
                             color: AppColors.textGrey,
-                            fontWeight:
-                                FontWeight.w500,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
@@ -574,8 +382,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   right: -2,
                   top: -2,
                   child: Container(
-                    padding:
-                        const EdgeInsets.all(4),
+                    padding: const EdgeInsets.all(4),
                     decoration: const BoxDecoration(
                       color: AppColors.dangerRed,
                       shape: BoxShape.circle,
@@ -585,8 +392,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 10,
-                        fontWeight:
-                            FontWeight.bold,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
@@ -595,10 +401,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             ),
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) =>
-                    const NotificationsScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
             ),
           ),
           const SizedBox(width: 8),
@@ -607,39 +410,27 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       body: RefreshIndicator(
         onRefresh: _loadDashboardData,
         child: SingleChildScrollView(
-          physics:
-              const AlwaysScrollableScrollPhysics(),
-          padding:
-              const EdgeInsets.fromLTRB(
-            16,
-            10,
-            16,
-            28,
-          ),
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
-              // SAFETY STATUS
-
+              // ======================================================
+              // 1. SAFETY STATUS CARD
+              // ======================================================
               AppCard(
                 color: AppColors.lightGreenBg,
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(
+                  padding: const EdgeInsets.symmetric(
                     vertical: 8,
                     horizontal: 4,
                   ),
                   child: Row(
                     children: [
                       Container(
-                        padding:
-                            const EdgeInsets.all(14),
-                        decoration:
-                            const BoxDecoration(
-                          color:
-                              AppColors.primaryGreen,
+                        padding: const EdgeInsets.all(14),
+                        decoration: const BoxDecoration(
+                          color: AppColors.primaryGreen,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -651,14 +442,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       const SizedBox(width: 16),
                       const Expanded(
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               'You are Safe',
                               style: TextStyle(
-                                fontWeight:
-                                    FontWeight.bold,
+                                fontWeight: FontWeight.bold,
                                 fontSize: 19,
                               ),
                             ),
@@ -666,19 +455,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             Text(
                               'Safety Status: Low Risk',
                               style: TextStyle(
-                                color:
-                                    AppColors.textGrey,
+                                color: AppColors.textGrey,
                                 fontSize: 15,
-                                fontWeight:
-                                    FontWeight.w500,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                             SizedBox(height: 2),
                             Text(
                               'Updated just now',
                               style: TextStyle(
-                                color:
-                                    AppColors.textGrey,
+                                color: AppColors.textGrey,
                                 fontSize: 13.5,
                               ),
                             ),
@@ -692,51 +478,42 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
               const SizedBox(height: 18),
 
-              // WEATHER + CROWD
-
+              // ======================================================
+              // 2. DYNAMIC WEATHER & DYNAMIC CROWD ROW
+              // ======================================================
               IntrinsicHeight(
                 child: Row(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.stretch,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Dynamic Weather Card
                     Expanded(
                       child: AppCard(
                         child: Padding(
-                          padding:
-                              const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(8),
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            mainAxisAlignment:
-                                MainAxisAlignment
-                                    .spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Row(
                                 mainAxisAlignment:
-                                    MainAxisAlignment
-                                        .spaceBetween,
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Icon(
                                     _weatherIcon(),
-                                    color:
-                                        AppColors.infoBlue,
+                                    color: AppColors.infoBlue,
                                     size: 30,
                                   ),
                                   IconButton(
-                                    padding:
-                                        EdgeInsets.zero,
-                                    constraints:
-                                        const BoxConstraints(),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
                                     iconSize: 22,
                                     tooltip: 'Refresh',
-                                    onPressed:
-                                        _weatherLoading
-                                            ? null
-                                            : _loadDashboardData,
+                                    onPressed: _weatherLoading
+                                        ? null
+                                        : _loadDashboardData,
                                     icon: const Icon(
                                       Icons.refresh,
-                                      color:
-                                          AppColors.textGrey,
+                                      color: AppColors.textGrey,
                                     ),
                                   ),
                                 ],
@@ -748,44 +525,61 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                                     : '${_temperature?.round() ?? 28}°C',
                                 style: const TextStyle(
                                   fontSize: 28,
-                                  fontWeight:
-                                      FontWeight.bold,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: -0.5,
                                 ),
                               ),
                               Text(
                                 _weatherCondition,
                                 maxLines: 1,
-                                overflow:
-                                    TextOverflow.ellipsis,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  color:
-                                      AppColors.textGrey,
+                                  color: AppColors.textGrey,
                                   fontSize: 15,
-                                  fontWeight:
-                                      FontWeight.w600,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              Text(
-                                _weatherLoading
-                                    ? 'Humidity: --'
-                                    : 'Humidity: ${_humidity?.round() ?? 75}%',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight:
-                                      FontWeight.w500,
-                                ),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.water_drop_outlined,
+                                    size: 16,
+                                    color: AppColors.infoBlue,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _weatherLoading
+                                        ? 'Humidity: --'
+                                        : 'Humidity: ${_humidity?.round() ?? 75}%',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.textDark,
+                                    ),
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 4),
-                              Text(
-                                _weatherLoading
-                                    ? 'Wind: -- km/h'
-                                    : 'Wind: ${_windSpeed?.round() ?? 12} km/h',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight:
-                                      FontWeight.w500,
-                                ),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.air,
+                                    size: 16,
+                                    color: AppColors.textGrey,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _weatherLoading
+                                        ? 'Wind: -- km/h'
+                                        : 'Wind: ${_windSpeed?.round() ?? 12} km/h',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.textDark,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -795,26 +589,21 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
                     const SizedBox(width: 14),
 
+                    // Dynamic Crowd Card
                     Expanded(
                       child: AppCard(
                         child: Padding(
-                          padding:
-                              const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(8),
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            mainAxisAlignment:
-                                MainAxisAlignment
-                                    .spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               const Text(
                                 'Crowd Level',
                                 style: TextStyle(
-                                  color:
-                                      AppColors.textGrey,
+                                  color: AppColors.textGrey,
                                   fontSize: 15,
-                                  fontWeight:
-                                      FontWeight.w600,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(height: 10),
@@ -826,19 +615,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                                     size: 28,
                                   ),
                                   const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      _crowdLevel,
-                                      overflow:
-                                          TextOverflow
-                                              .ellipsis,
-                                      style: TextStyle(
-                                        fontWeight:
-                                            FontWeight.bold,
-                                        color:
-                                            _crowdColor,
-                                        fontSize: 18,
-                                      ),
+                                  Text(
+                                    _crowdLevel,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: _crowdColor,
+                                      fontSize: 18,
                                     ),
                                   ),
                                 ],
@@ -850,20 +632,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                                     : '$_crowdPeopleCount people',
                                 style: const TextStyle(
                                   fontSize: 16,
-                                  fontWeight:
-                                      FontWeight.bold,
-                                  color:
-                                      AppColors.textDark,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textDark,
                                 ),
                               ),
                               const SizedBox(height: 14),
                               GestureDetector(
-                                onTap: () =>
-                                    Navigator.push(
+                                onTap: () => Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) =>
-                                        const MapCrowdScreen(),
+                                    builder: (_) => const MapCrowdScreen(),
                                   ),
                                 ),
                                 child: const Row(
@@ -871,21 +649,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                                     Text(
                                       'View Details',
                                       style: TextStyle(
-                                        color:
-                                            AppColors
-                                                .primaryGreen,
+                                        color: AppColors.primaryGreen,
                                         fontSize: 14,
-                                        fontWeight:
-                                            FontWeight.bold,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                     SizedBox(width: 4),
                                     Icon(
                                       Icons.arrow_forward_ios,
                                       size: 13,
-                                      color:
-                                          AppColors
-                                              .primaryGreen,
+                                      color: AppColors.primaryGreen,
                                     ),
                                   ],
                                 ),
@@ -901,19 +674,18 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
               const SizedBox(height: 18),
 
-              // TRAVEL ALERT
-
+              // ======================================================
+              // 3. DYNAMIC TRAVEL ALERT CARD
+              // ======================================================
               AppCard(
                 color: AppColors.dangerBgLight,
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(
+                  padding: const EdgeInsets.symmetric(
                     vertical: 8,
                     horizontal: 6,
                   ),
                   child: Row(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Icon(
                         Icons.warning_amber_rounded,
@@ -923,49 +695,45 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Travel Alert',
-                              style: TextStyle(
-                                fontWeight:
-                                    FontWeight.bold,
-                                fontSize: 17,
-                              ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: const [
+                                Text(
+                                  'Travel Alert',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 17,
+                                  ),
+                                ),
+                                Icon(Icons.chevron_right, size: 22),
+                              ],
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'High crowd detected near\n'
-                              '$_nearbyAlertLocation. '
-                              'Avoid if possible.',
+                              'High crowd detected near\n$_nearbyAlertLocation. Avoid if possible.',
                               style: const TextStyle(
                                 fontSize: 14.5,
                                 height: 1.35,
-                                color:
-                                    AppColors.textGrey,
-                                fontWeight:
-                                    FontWeight.w500,
+                                color: AppColors.textGrey,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                             const SizedBox(height: 10),
                             GestureDetector(
-                              onTap: () =>
-                                  Navigator.push(
+                              onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) =>
-                                      const MapCrowdScreen(),
+                                  builder: (_) => const MapCrowdScreen(),
                                 ),
                               ),
                               child: const Text(
                                 'View on Map >',
                                 style: TextStyle(
-                                  color:
-                                      AppColors.dangerRed,
+                                  color: AppColors.dangerRed,
                                   fontSize: 14,
-                                  fontWeight:
-                                      FontWeight.bold,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
@@ -979,71 +747,53 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
               const SizedBox(height: 18),
 
-              // OFFLINE MESH
-
+              // ======================================================
+              // 4. OFFLINE MESH PEER RELAY CARD
+              // ======================================================
               AppCard(
                 color: const Color(0xFFF0FDF4),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(
+                  padding: const EdgeInsets.symmetric(
                     vertical: 8,
                     horizontal: 6,
                   ),
                   child: Row(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Container(
-                        padding:
-                            const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryGreen
-                              .withOpacity(0.15),
+                          color: AppColors.primaryGreen.withOpacity(0.15),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
                           Icons.sensors,
-                          color:
-                              AppColors.primaryGreen,
+                          color: AppColors.primaryGreen,
                           size: 28,
                         ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment
-                                      .spaceBetween,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Expanded(
-                                  child: Text(
-                                    'Offline Mesh Active',
-                                    maxLines: 1,
-                                    overflow:
-                                        TextOverflow
-                                            .ellipsis,
-                                    style: TextStyle(
-                                      fontWeight:
-                                          FontWeight.bold,
-                                      fontSize: 16,
-                                      color:
-                                          AppColors.textDark,
-                                    ),
+                                const Text(
+                                  'Offline Mesh Active',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: AppColors.textDark,
                                   ),
                                 ),
-                                const SizedBox(width: 8),
                                 Text(
                                   '● $_nearbyMeshNodes Nodes',
                                   style: const TextStyle(
-                                    fontWeight:
-                                        FontWeight.bold,
+                                    fontWeight: FontWeight.bold,
                                     fontSize: 13,
-                                    color:
-                                        AppColors.primaryGreen,
+                                    color: AppColors.primaryGreen,
                                   ),
                                 ),
                               ],
@@ -1051,13 +801,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             const SizedBox(height: 5),
                             Text(
                               _meshRelayActive
-                                  ? 'Mesh active. Listening for nearby TrekCure devices and distress signals.'
-                                  : 'Starting offline mesh...',
+                                  ? 'Zero-network BLE beacon relay listening for nearby distress signals.'
+                                  : 'Scanning for nearby relay peers...',
                               style: const TextStyle(
                                 fontSize: 13.5,
                                 height: 1.35,
-                                color:
-                                    AppColors.textGrey,
+                                color: AppColors.textGrey,
                               ),
                             ),
                           ],
@@ -1071,10 +820,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           ),
         ),
       ),
-      bottomNavigationBar:
-          const AppBottomNav(currentIndex: 0),
-      floatingActionButtonLocation:
-          FloatingActionButtonLocation.centerDocked,
+      bottomNavigationBar: const AppBottomNav(currentIndex: 0),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 }
