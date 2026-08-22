@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../theme/app_theme.dart';
 import '../screens/home_dashboard_screen.dart';
 import '../screens/map_crowd_screen.dart';
@@ -18,7 +19,7 @@ class AppBottomNav extends StatelessWidget {
       context,
       PageRouteBuilder(
         transitionDuration: Duration.zero,
-        pageBuilder: (_, __, ___) => screen,
+        pageBuilder: (_, _, _) => screen,
       ),
     );
   }
@@ -35,15 +36,35 @@ class AppBottomNav extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _navIcon(context, Icons.home_rounded, 'Home', 0,
-                const HomeDashboardScreen()),
-            _navIcon(context, Icons.map_rounded, 'Map', 1,
-                const MapCrowdScreen()),
+            _navIcon(
+              context,
+              Icons.home_rounded,
+              'Home',
+              0,
+              const HomeDashboardScreen(),
+            ),
+            _navIcon(
+              context,
+              Icons.map_rounded,
+              'Map',
+              1,
+              const MapCrowdScreen(),
+            ),
             _sosIcon(context),
-            _navIcon(context, Icons.cloud_outlined, 'Weather', 3,
-                const WeatherScreen()),
-            _navIcon(context, Icons.person_outline, 'Profile', 4,
-                const ProfileScreen()),
+            _navIcon(
+              context,
+              Icons.cloud_outlined,
+              'Weather',
+              3,
+              const WeatherScreen(),
+            ),
+            _navIcon(
+              context,
+              Icons.person_outline,
+              'Profile',
+              4,
+              const ProfileScreen(),
+            ),
           ],
         ),
       ),
@@ -51,7 +72,12 @@ class AppBottomNav extends StatelessWidget {
   }
 
   Widget _navIcon(
-      BuildContext context, IconData icon, String label, int index, Widget screen) {
+    BuildContext context,
+    IconData icon,
+    String label,
+    int index,
+    Widget screen,
+  ) {
     final selected = currentIndex == index;
     final color = selected ? AppColors.primaryGreen : AppColors.textGrey;
     return InkWell(

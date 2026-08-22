@@ -378,7 +378,7 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
                 child: Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.blue.withOpacity(0.20),
+                    color: Colors.blue.withValues(alpha: 0.20),
                   ),
 
                   child: const Icon(

@@ -11,8 +11,7 @@ class TrekCureApiService {
   static const String baseUrl = 'http://10.0.2.2:8000';
 
   // FastAPI Weather API
-  static const String weatherBaseUrl = 'http://10.0.2.2:8001';
-
+  static const String weatherBaseUrl = 'https://trekcure-weather.onrender.com';
   // ============================================================
   // CREATE DIGITAL ID
   // ============================================================

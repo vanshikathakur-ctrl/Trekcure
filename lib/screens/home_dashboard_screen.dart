@@ -4,9 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
 import 'map_crowd_screen.dart';
-import 'sos_emergency_screen.dart';
-import 'weather_screen.dart';
-import 'profile_screen.dart';
 import 'notifications_screen.dart';
 
 class HomeDashboardScreen extends StatefulWidget {
@@ -58,9 +55,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         title: Row(
           children: [
             const Icon(Icons.menu, color: AppColors.textDark),
-
             const SizedBox(width: 12),
-
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -71,7 +66,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-
                 Row(
                   children: const [
                     Icon(
@@ -90,14 +84,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             ),
           ],
         ),
-
         actions: [
           IconButton(
             icon: Stack(
               clipBehavior: Clip.none,
               children: [
                 const Icon(Icons.notifications_none, color: AppColors.textDark),
-
                 Positioned(
                   right: -2,
                   top: -2,
@@ -122,7 +114,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           ),
         ],
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
         child: Column(
@@ -141,9 +132,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     ),
                     child: const Icon(Icons.shield, color: Colors.white),
                   ),
-
                   const SizedBox(width: 14),
-
                   const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,9 +193,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 12),
-
                 Expanded(
                   child: AppCard(
                     child: Column(
@@ -219,9 +206,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             fontSize: 12,
                           ),
                         ),
-
                         const SizedBox(height: 10),
-
                         Row(
                           children: const [
                             Icon(Icons.groups, color: AppColors.warningOrange),
@@ -235,14 +220,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             ),
                           ],
                         ),
-
                         const Text(
                           '240 people',
                           style: TextStyle(fontSize: 12),
                         ),
-
                         const SizedBox(height: 8),
-
                         GestureDetector(
                           onTap: () => Navigator.push(
                             context,
@@ -277,9 +259,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     Icons.warning_amber_rounded,
                     color: AppColors.dangerRed,
                   ),
-
                   const SizedBox(width: 10),
-
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -294,9 +274,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             Icon(Icons.chevron_right, size: 18),
                           ],
                         ),
-
                         const SizedBox(height: 2),
-
                         const Text(
                           'High crowd detected near\nGateway of India. Avoid if possible.',
                           style: TextStyle(
@@ -304,9 +282,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             color: AppColors.textGrey,
                           ),
                         ),
-
                         const SizedBox(height: 4),
-
                         GestureDetector(
                           onTap: () => Navigator.push(
                             context,
@@ -329,101 +305,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 ],
               ),
             ),
-
-            const SizedBox(height: 18),
-
-            const Text(
-              'Quick Actions',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-
-            const SizedBox(height: 12),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _quickAction(
-                  context,
-                  Icons.map_outlined,
-                  'Map',
-                  AppColors.primaryGreen,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const MapCrowdScreen()),
-                  ),
-                ),
-
-                _quickAction(
-                  context,
-                  Icons.sos,
-                  'SOS',
-                  AppColors.dangerRed,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const SosEmergencyScreen(),
-                    ),
-                  ),
-                ),
-
-                _quickAction(
-                  context,
-                  Icons.cloud_outlined,
-                  'Weather',
-                  AppColors.infoBlue,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const WeatherScreen()),
-                  ),
-                ),
-
-                _quickAction(
-                  context,
-                  Icons.person_outline,
-                  'Contacts',
-                  AppColors.textGrey,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),
-
       bottomNavigationBar: const AppBottomNav(currentIndex: 0),
-
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-    );
-  }
-
-  Widget _quickAction(
-    BuildContext context,
-    IconData icon,
-    String label,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color),
-          ),
-
-          const SizedBox(height: 6),
-
-          Text(label, style: const TextStyle(fontSize: 12)),
-        ],
-      ),
     );
   }
 }

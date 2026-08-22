@@ -14,7 +14,7 @@ async def get_weather(latitude: float, longitude: float):
         "&current=temperature_2m,relative_humidity_2m,"
         "apparent_temperature,weather_code,wind_speed_10m"
         "&hourly=temperature_2m,weather_code"
-        "&forecast_days=1"
+        "&forecast_days=2"
         "&timezone=auto"
     )
 
@@ -63,13 +63,31 @@ async def get_weather(latitude: float, longitude: float):
     temperatures = hourly["temperature_2m"]
     weather_codes = hourly["weather_code"]
 
-    # Return the next 5 available forecast hours.
-    for i in range(min(5, len(times))):
+    # Current local time at the tourist's location
+    current_time = current["time"]
+
+    # Find the current hour in the hourly forecast
+    current_index = 0
+
+    for i, time in enumerate(times):
+        if time >= current_time:
+            current_index = i
+            break
+
+    # Return current hour + next 4 hours
+    for i in range(
+        current_index,
+        min(current_index + 5, len(times))
+    ):
         forecast.append({
             "time": times[i],
             "temperature": temperatures[i],
             "weather_code": weather_codes[i],
         })
+
+    # ------------------------------------------------------------
+    # RESPONSE
+    # ------------------------------------------------------------
 
     return {
         "temperature": temperature,
