@@ -5,7 +5,6 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
   firebase_core
-  flutter_blue_plus_winrt
   geolocator_windows
   permission_handler_windows
   url_launcher_windows
