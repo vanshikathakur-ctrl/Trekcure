@@ -187,123 +187,145 @@ class _HomeDashboardScreenState
   // SHOW INCOMING SOS DIALOG
   // ============================================================
 
-  void _showIncomingSosDialog({
-    required String senderName,
-    required String payload,
-  }) {
-    if (!mounted) return;
+ void _showIncomingSosDialog({
+  required String senderName,
+  required String payload,
+}) {
+  if (!mounted) return;
 
-    String message = payload;
-    String latitude = '';
-    String longitude = '';
+  String message = 'Emergency SOS received';
+  String location = 'Location unavailable';
 
-    final parts = payload.split('|');
+  final parts = payload.split('|');
 
-    if (parts.isNotEmpty &&
-        parts.first.toUpperCase() == 'SOS') {
-      if (parts.length > 1 &&
-          parts[1].trim().isNotEmpty) {
-        message = parts[1];
-      } else {
-        message = 'Emergency SOS received';
-      }
-
-      if (parts.length > 2) {
-        latitude = parts[2];
-      }
-
-      if (parts.length > 3) {
-        longitude = parts[3];
-      }
+  if (parts.isNotEmpty &&
+      parts.first.toUpperCase() == 'SOS') {
+    if (parts.length > 1 &&
+        parts[1].trim().isNotEmpty) {
+      message = parts[1];
     }
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Row(
-            children: [
-              Icon(
-                Icons.sos,
-                color: AppColors.dangerRed,
-                size: 32,
-              ),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'SOS RECEIVED',
-                  style: TextStyle(
-                    color: AppColors.dangerRed,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Emergency signal received from:',
+    // Payload format:
+    // SOS|message|latitude|longitude|senderName|readableLocation
+    if (parts.length > 5 &&
+        parts[5].trim().isNotEmpty) {
+      location = parts[5];
+    }
+  }
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) {
+      return AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Row(
+          children: [
+            Icon(
+              Icons.sos,
+              color: AppColors.dangerRed,
+              size: 32,
+            ),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'SOS RECEIVED',
                 style: TextStyle(
-                  color: AppColors.textGrey,
-                  fontSize: 14,
-                ),
-              ),
-
-              const SizedBox(height: 6),
-
-              Text(
-                senderName,
-                style: const TextStyle(
+                  color: AppColors.dangerRed,
                   fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  color: AppColors.textDark,
                 ),
               ),
-
-              const SizedBox(height: 16),
-
-              Text(
-                message,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: AppColors.textDark,
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Emergency signal received from:',
+              style: TextStyle(
+                color: AppColors.textGrey,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              senderName,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: AppColors.textDark,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              style: const TextStyle(
+                fontSize: 16,
+                color: AppColors.textDark,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Location:',
+              style: TextStyle(
+                color: AppColors.textGrey,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              location,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: AppColors.textDark,
+              ),
+            ),
+          ],
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(
+          24,
+          0,
+          24,
+          20,
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor:
+                    AppColors.dangerRed,
+                foregroundColor:
+                    Colors.white,
+                minimumSize:
+                    const Size.fromHeight(48),
+                shape:
+                    RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(10),
                 ),
               ),
-
-              if (latitude.isNotEmpty &&
-                  longitude.isNotEmpty) ...[
-                const SizedBox(height: 16),
-
-                Text(
-                  'Location:',
-                  style: TextStyle(
-                    color: AppColors.textGrey,
-                    fontSize: 14,
-                  ),
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text(
+                'ACKNOWLEDGE',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
                 ),
-
-                const SizedBox(height: 4),
-
-                Text(
-                  '$latitude, $longitude',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ],
+              ),
+            ),
           ),
-          actions: [
-            TextButton(
+          const SizedBox(height: 4),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
               onPressed: () {
                 Navigator.pop(context);
               },
@@ -315,26 +337,12 @@ class _HomeDashboardScreenState
                 ),
               ),
             ),
-
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    AppColors.dangerRed,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text(
-                'ACKNOWLEDGE',
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
+          ),
+        ],
+      );
+    },
+  );
+}
   // ============================================================
   // LOAD USER PROFILE
   // ============================================================
