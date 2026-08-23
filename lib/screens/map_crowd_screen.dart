@@ -13,57 +13,117 @@ import '../widgets/bottom_nav.dart';
 class MapCrowdScreen extends StatefulWidget {
   const MapCrowdScreen({super.key});
 
+  // Latest real location available from this screen.
+  // Other parts of the app can access these values later.
+  static Position? latestPosition;
+  static int? latestFloor;
+
   @override
   State<MapCrowdScreen> createState() => _MapCrowdScreenState();
 }
 
 class _MapCrowdScreenState extends State<MapCrowdScreen> {
+  // ============================================================
+  // MAP
+  // ============================================================
+
   final MapController _mapController = MapController();
-
-  LatLng? _userLocation;
-
-  List<WeightedLatLng> _crowdPoints = [];
-
-  StreamSubscription<Position>? _locationSubscription;
-
-  bool _isLoading = true;
-  bool _locationError = false;
-
-  String _crowdLevel = 'Loading...';
-  int _density = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _getLocation();
-  }
-
-  @override
-  void dispose() {
-    _locationSubscription?.cancel();
-    super.dispose();
-  }
 
   // ============================================================
   // LOCATION
   // ============================================================
 
+  LatLng? _userLocation;
+  Position? _bestPosition;
+
+  StreamSubscription<Position>? _locationSubscription;
+
+  Timer? _locationRetryTimer;
+
+  bool _isLoading = true;
+  bool _locationError = false;
+  bool _isGettingPreciseLocation = false;
+  bool _precisePermission = false;
+
+  String _locationStatus = 'Getting precise location...';
+
+  double? _accuracyMeters;
+  double? _altitudeMeters;
+  double? _altitudeAccuracyMeters;
+
+  String _floorText = 'Floor: Not available';
+
+  // ============================================================
+  // CROWD
+  // ============================================================
+
+  List<WeightedLatLng> _crowdPoints = [];
+
+  String _crowdLevel = 'Loading...';
+
+  int _density = 0;
+
+  // ============================================================
+  // INIT
+  // ============================================================
+
+  @override
+  void initState() {
+    super.initState();
+
+    _getLocation();
+  }
+
+  // ============================================================
+  // DISPOSE
+  // ============================================================
+
+  @override
+  void dispose() {
+    _locationSubscription?.cancel();
+    _locationRetryTimer?.cancel();
+
+    super.dispose();
+  }
+
+  // ============================================================
+  // GET MOST ACCURATE LOCATION
+  // ============================================================
+
   Future<void> _getLocation() async {
+    if (_isGettingPreciseLocation) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _locationError = false;
+        _isGettingPreciseLocation = true;
+        _locationStatus = 'Checking precise location...';
+      });
+    }
+
     try {
-      // Check whether GPS is enabled.
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      // ========================================================
+      // LOCATION SERVICE
+      // ========================================================
+
+      final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
       if (!serviceEnabled) {
         _showLocationError(
-          'Location services are disabled. Please turn on GPS.',
+          'GPS/location services are disabled. Please turn them on.',
         );
         return;
       }
 
-      // Check permission.
+      // ========================================================
+      // PERMISSION
+      // ========================================================
+
       LocationPermission permission = await Geolocator.checkPermission();
 
-      // Ask for permission if necessary.
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
@@ -75,71 +135,346 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
       if (permission == LocationPermission.deniedForever) {
         _showLocationError(
-          'Location permission is permanently denied. '
-          'Please enable it from Settings.',
+          'Location permission is permanently denied. Please enable it in device settings.',
         );
         return;
       }
 
-      // Get current location.
-      final Position position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
+      // ========================================================
+      // PRECISE / APPROXIMATE CHECK
+      // ========================================================
 
-      _updateLocation(position);
+      try {
+        final LocationAccuracyStatus accuracyStatus =
+            await Geolocator.getLocationAccuracy();
 
-      // Continue tracking location.
-      _locationSubscription =
-          Geolocator.getPositionStream(
+        _precisePermission = accuracyStatus == LocationAccuracyStatus.precise;
+      } catch (e) {
+        debugPrint('PRECISE LOCATION CHECK ERROR: $e');
+
+        // Continue with high-accuracy requests if the
+        // platform does not support the accuracy check.
+        _precisePermission = true;
+      }
+
+      if (!_precisePermission) {
+        _showApproximateLocationDialog();
+      }
+
+      // ========================================================
+      // MULTIPLE HIGH-ACCURACY READINGS
+      // ========================================================
+
+      Position? bestPosition;
+
+      if (mounted) {
+        setState(() {
+          _locationStatus = 'Finding your most accurate GPS position...';
+        });
+      }
+
+      for (int i = 0; i < 6; i++) {
+        try {
+          final Position position = await Geolocator.getCurrentPosition(
             locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.high,
-              distanceFilter: 50,
+              accuracy: LocationAccuracy.bestForNavigation,
+              distanceFilter: 0,
+              timeLimit: Duration(seconds: 15),
             ),
-          ).listen((Position position) {
-            _updateLocation(position);
-          });
+          );
+
+          debugPrint(
+            'GPS READING ${i + 1}: '
+            '${position.latitude}, '
+            '${position.longitude} '
+            'accuracy=${position.accuracy}m',
+          );
+
+          // Keep the reading with the smallest reported
+          // horizontal accuracy.
+          if (bestPosition == null ||
+              position.accuracy < bestPosition.accuracy) {
+            bestPosition = position;
+          }
+
+          if (mounted) {
+            setState(() {
+              _locationStatus =
+                  'Improving GPS accuracy... '
+                  '±${position.accuracy.toStringAsFixed(1)} m';
+            });
+          }
+
+          // A very good phone GPS result.
+          if (position.accuracy <= 5) {
+            break;
+          }
+        } on TimeoutException catch (e) {
+          debugPrint('GPS READING TIMEOUT ${i + 1}: $e');
+        } catch (e) {
+          debugPrint('GPS READING ERROR ${i + 1}: $e');
+        }
+      }
+
+      // ========================================================
+      // LAST KNOWN LOCATION FALLBACK
+      // ========================================================
+
+      if (bestPosition == null) {
+        try {
+          final Position? lastKnownPosition =
+              await Geolocator.getLastKnownPosition();
+
+          if (lastKnownPosition != null) {
+            bestPosition = lastKnownPosition;
+          }
+        } catch (e) {
+          debugPrint('LAST KNOWN LOCATION ERROR: $e');
+        }
+      }
+
+      // ========================================================
+      // NO LOCATION
+      // ========================================================
+
+      if (bestPosition == null) {
+        _showLocationError(
+          'Unable to get your location. Move outdoors or to an area with better GPS reception and try again.',
+        );
+        return;
+      }
+
+      // ========================================================
+      // APPLY BEST LOCATION
+      // ========================================================
+
+      await _updateLocation(bestPosition, moveMap: true);
+
+      // ========================================================
+      // START CONTINUOUS TRACKING
+      // ========================================================
+
+      await _startLocationStream();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _isGettingPreciseLocation = false;
+      });
+    } on TimeoutException catch (e) {
+      debugPrint('GPS MAIN TIMEOUT: $e');
+
+      _showLocationError('GPS took too long to get an accurate location.');
     } catch (e) {
+      debugPrint('GPS MAIN ERROR: $e');
+
       _showLocationError('Unable to get your current location.');
     }
   }
 
   // ============================================================
-  // UPDATE USER LOCATION
+  // CONTINUOUS LOCATION TRACKING
   // ============================================================
 
-  void _updateLocation(Position position) {
+  Future<void> _startLocationStream() async {
+    await _locationSubscription?.cancel();
+
+    _locationSubscription =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 5,
+          ),
+        ).listen(
+          (Position position) async {
+            await _updateLocation(position, moveMap: false);
+          },
+          onError: (Object error) {
+            debugPrint('LOCATION STREAM ERROR: $error');
+          },
+        );
+  }
+
+  // ============================================================
+  // APPLY LOCATION
+  // ============================================================
+
+  Future<void> _updateLocation(
+    Position position, {
+    bool moveMap = false,
+  }) async {
     if (!mounted) return;
 
-    final LatLng location = LatLng(position.latitude, position.longitude);
+    // If we already have a much better reading, ignore a
+    // significantly worse one.
+    if (_bestPosition != null &&
+        position.accuracy > _bestPosition!.accuracy + 20 &&
+        position.accuracy > 30) {
+      return;
+    }
+
+    _bestPosition = position;
+
+    final LatLng currentLocation = LatLng(
+      position.latitude,
+      position.longitude,
+    );
+
+    // ========================================================
+    // ACCURACY
+    // ========================================================
+
+    final double accuracy = position.accuracy;
+
+    String accuracyText;
+
+    if (accuracy <= 5) {
+      accuracyText = 'Very accurate • ±${accuracy.toStringAsFixed(1)} m';
+    } else if (accuracy <= 10) {
+      accuracyText = 'High accuracy • ±${accuracy.toStringAsFixed(1)} m';
+    } else if (accuracy <= 25) {
+      accuracyText = 'Good accuracy • ±${accuracy.toStringAsFixed(1)} m';
+    } else if (accuracy <= 50) {
+      accuracyText = 'Moderate accuracy • ±${accuracy.toStringAsFixed(1)} m';
+    } else {
+      accuracyText = 'Low accuracy • ±${accuracy.toStringAsFixed(1)} m';
+    }
+
+    // ========================================================
+    // ALTITUDE
+    // ========================================================
+    //
+    // Your installed Geolocator API does not expose
+    // Position.hasAltitude, so use altitude directly.
+    // ========================================================
+
+    final double? altitude = position.altitude;
+
+    final double? altitudeAccuracy = position.altitudeAccuracy;
+
+    // ========================================================
+    // FLOOR
+    // ========================================================
+
+    final int? floor = position.floor;
+
+    if (floor != null) {
+      _floorText = 'Floor: ${_formatFloor(floor)}';
+
+      MapCrowdScreen.latestFloor = floor;
+    } else {
+      _floorText = 'Floor: Not available';
+
+      MapCrowdScreen.latestFloor = null;
+    }
+
+    // ========================================================
+    // SAVE LATEST REAL LOCATION
+    // ========================================================
+
+    MapCrowdScreen.latestPosition = position;
+
+    if (!mounted) return;
 
     setState(() {
-      _userLocation = location;
-      _isLoading = false;
+      _userLocation = currentLocation;
+
+      _bestPosition = position;
+
+      _accuracyMeters = accuracy;
+
+      _altitudeMeters = altitude;
+
+      _altitudeAccuracyMeters = altitudeAccuracy;
+
+      _locationStatus = accuracyText;
+
       _locationError = false;
+
+      _isLoading = false;
     });
 
-    // Generate crowd data around current location.
-    _generateCrowdData(location);
+    // Keep the crowd visualization centered around the
+    // user's actual current GPS position.
+    _generateCrowdData(currentLocation);
 
-    // Move map to current location.
-    _mapController.move(location, 14.0);
+    if (moveMap) {
+      _mapController.move(currentLocation, 17.0);
+    }
+  }
+
+  // ============================================================
+  // FLOOR FORMAT
+  // ============================================================
+
+  String _formatFloor(int floor) {
+    if (floor == 0) {
+      return 'Ground';
+    }
+
+    if (floor == 1) {
+      return '1st';
+    }
+
+    if (floor == 2) {
+      return '2nd';
+    }
+
+    if (floor == 3) {
+      return '3rd';
+    }
+
+    return '${floor}th';
+  }
+
+  // ============================================================
+  // APPROXIMATE LOCATION WARNING
+  // ============================================================
+
+  void _showApproximateLocationDialog() {
+    if (!mounted) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: const Text('Precise location is off'),
+            content: const Text(
+              'TrekCure has approximate location permission. For the best possible GPS accuracy, enable Precise Location in your device settings.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Later'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+
+                  Geolocator.openAppSettings();
+                },
+                child: const Text('Open Settings'),
+              ),
+            ],
+          );
+        },
+      );
+    });
   }
 
   // ============================================================
   // CROWD DATA
+  // ============================================================
   //
   // IMPORTANT:
-  // These values are currently DEMO DATA.
-  //
-  // Later this function can be replaced with:
-  //
-  // API / Supabase crowd data
-  //             ↓
-  //       _crowdPoints
-  //             ↓
-  //          Heatmap
+  // GPS location is real.
+  // Crowd data below is still simulated.
   // ============================================================
 
   void _generateCrowdData(LatLng center) {
@@ -147,18 +482,13 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
     final List<WeightedLatLng> points = [];
 
-    // Keep track of density separately because
-    // WeightedLatLng in flutter_map_heatmap 0.0.8
-    // does not expose a "weight" getter.
     double totalDensity = 0;
 
-    // Create 100 density points around the user.
     for (int i = 0; i < 100; i++) {
       final double latitudeOffset = (random.nextDouble() - 0.5) * 0.05;
 
       final double longitudeOffset = (random.nextDouble() - 0.5) * 0.05;
 
-      // Density between 0.1 and 1.0.
       final double density = 0.1 + random.nextDouble() * 0.9;
 
       totalDensity += density;
@@ -174,7 +504,6 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
       );
     }
 
-    // Calculate average density.
     final double averageDensity = totalDensity / points.length;
 
     final int percentage = (averageDensity * 100).round();
@@ -193,33 +522,32 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
     setState(() {
       _crowdPoints = points;
+
       _density = percentage;
+
       _crowdLevel = level;
     });
   }
 
   // ============================================================
-  // REFRESH HEATMAP
+  // REFRESH LOCATION
   // ============================================================
 
-  void _refreshHeatmap() {
-    if (_userLocation == null) {
-      _getLocation();
-      return;
-    }
+  Future<void> _refreshLocation() async {
+    await _getLocation();
 
-    _generateCrowdData(_userLocation!);
+    if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Crowd heatmap updated'),
+        content: Text('Location updated'),
         duration: Duration(seconds: 1),
       ),
     );
   }
 
   // ============================================================
-  // MOVE TO USER LOCATION
+  // MOVE TO USER
   // ============================================================
 
   void _goToCurrentLocation() {
@@ -228,11 +556,151 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
       return;
     }
 
-    _mapController.move(_userLocation!, 15.0);
+    _mapController.move(_userLocation!, 18.0);
   }
 
   // ============================================================
-  // LOCATION ERROR
+  // LOCATION DETAILS
+  // ============================================================
+
+  void _showLocationDetails() {
+    final Position? position = _bestPosition;
+
+    if (position == null) {
+      _showMessage('Location is not available yet.');
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Precise GPS Location',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+
+                const SizedBox(height: 18),
+
+                _detailRow(
+                  Icons.location_on,
+                  'Latitude',
+                  position.latitude.toStringAsFixed(7),
+                ),
+
+                _detailRow(
+                  Icons.location_on,
+                  'Longitude',
+                  position.longitude.toStringAsFixed(7),
+                ),
+
+                _detailRow(
+                  Icons.gps_fixed,
+                  'Horizontal accuracy',
+                  '±${position.accuracy.toStringAsFixed(1)} m',
+                ),
+
+                _detailRow(
+                  Icons.height,
+                  'Elevation',
+                  '${_altitudeMeters?.toStringAsFixed(1) ?? '--'} m',
+                ),
+
+                if (_altitudeAccuracyMeters != null)
+                  _detailRow(
+                    Icons.vertical_align_center,
+                    'Vertical accuracy',
+                    '±${_altitudeAccuracyMeters!.toStringAsFixed(1)} m',
+                  ),
+
+                _detailRow(
+                  Icons.layers_outlined,
+                  'Floor',
+                  _floorText.replaceFirst('Floor: ', ''),
+                ),
+
+                _detailRow(
+                  Icons.meeting_room_outlined,
+                  'Room',
+                  'Not available from GPS',
+                ),
+
+                const SizedBox(height: 12),
+
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.lightGreenBg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'GPS can provide a highly accurate outdoor position, but it cannot reliably determine a specific room. Room-level positioning requires technologies such as BLE beacons, UWB, Wi-Fi fingerprinting, or a building indoor-positioning system.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textGrey,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // DETAIL ROW
+  // ============================================================
+
+  Widget _detailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 13),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: AppColors.primaryGreen),
+
+          const SizedBox(width: 10),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textGrey,
+                  ),
+                ),
+
+                const SizedBox(height: 2),
+
+                Text(
+                  value,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // ERROR
   // ============================================================
 
   void _showLocationError(String message) {
@@ -240,8 +708,25 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
     setState(() {
       _isLoading = false;
+
+      _isGettingPreciseLocation = false;
+
       _locationError = true;
+
+      _locationStatus = 'Location unavailable';
     });
+
+    _showMessage(message);
+  }
+
+  // ============================================================
+  // MESSAGE
+  // ============================================================
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
@@ -259,10 +744,29 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
           'Crowd Map',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
+
         actions: [
           IconButton(
-            onPressed: _refreshHeatmap,
-            tooltip: 'Refresh',
+            onPressed: _refreshLocation,
+            tooltip: 'Update location',
+            icon: const Icon(Icons.my_location),
+          ),
+
+          IconButton(
+            onPressed: _showLocationDetails,
+            tooltip: 'Location details',
+            icon: const Icon(Icons.info_outline),
+          ),
+
+          IconButton(
+            onPressed: () {
+              if (_userLocation == null) {
+                _getLocation();
+              } else {
+                _generateCrowdData(_userLocation!);
+              }
+            },
+            tooltip: 'Refresh crowd',
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -270,13 +774,11 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
       body: Column(
         children: [
-          // ======================================================
-          // MAP
-          // ======================================================
+          _buildLocationCard(),
 
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
                 child: _buildMap(),
@@ -284,31 +786,191 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
             ),
           ),
 
-          // ======================================================
-          // LEGEND
-          // ======================================================
           _buildLegend(),
 
-          // ======================================================
-          // CROWD INFORMATION
-          // ======================================================
           _buildCrowdCard(),
         ],
       ),
 
-      // ========================================================
-      // CURRENT LOCATION BUTTON
-      // ========================================================
       floatingActionButton: FloatingActionButton(
         onPressed: _goToCurrentLocation,
         tooltip: 'My Location',
         child: const Icon(Icons.my_location),
       ),
 
-      // ========================================================
-      // BOTTOM NAVIGATION
-      // ========================================================
       bottomNavigationBar: const AppBottomNav(currentIndex: 1),
+    );
+  }
+
+  // ============================================================
+  // LOCATION CARD
+  // ============================================================
+
+  Widget _buildLocationCard() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+      child: AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.lightGreenBg,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.gps_fixed,
+                    color: AppColors.primaryGreen,
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Current Location',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+
+                      const SizedBox(height: 2),
+
+                      Text(
+                        _locationStatus,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textGrey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                if (_precisePermission)
+                  const Icon(
+                    Icons.check_circle,
+                    color: AppColors.primaryGreen,
+                    size: 20,
+                  ),
+              ],
+            ),
+
+            const SizedBox(height: 10),
+
+            Text(
+              _bestPosition == null
+                  ? 'Waiting for GPS...'
+                  : '${_bestPosition!.latitude.toStringAsFixed(7)}, '
+                        '${_bestPosition!.longitude.toStringAsFixed(7)}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+            ),
+
+            const SizedBox(height: 10),
+
+            Row(
+              children: [
+                Expanded(
+                  child: _miniLocationStat(
+                    Icons.my_location,
+                    'Accuracy',
+                    _accuracyMeters == null
+                        ? '--'
+                        : '±${_accuracyMeters!.toStringAsFixed(1)} m',
+                  ),
+                ),
+
+                Expanded(
+                  child: _miniLocationStat(
+                    Icons.layers_outlined,
+                    'Floor',
+                    _floorText.replaceFirst('Floor: ', ''),
+                  ),
+                ),
+
+                Expanded(
+                  child: _miniLocationStat(
+                    Icons.height,
+                    'Elevation',
+                    _altitudeMeters == null
+                        ? '--'
+                        : '${_altitudeMeters!.toStringAsFixed(0)} m',
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            Row(
+              children: [
+                const Icon(
+                  Icons.meeting_room_outlined,
+                  size: 15,
+                  color: AppColors.textGrey,
+                ),
+
+                const SizedBox(width: 5),
+
+                const Expanded(
+                  child: Text(
+                    'Room-level positioning requires indoor technology.',
+                    style: TextStyle(fontSize: 10, color: AppColors.textGrey),
+                  ),
+                ),
+
+                TextButton(
+                  onPressed: _showLocationDetails,
+                  child: const Text('Details', style: TextStyle(fontSize: 11)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // MINI LOCATION STAT
+  // ============================================================
+
+  Widget _miniLocationStat(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: AppColors.primaryGreen),
+
+        const SizedBox(width: 4),
+
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(fontSize: 9, color: AppColors.textGrey),
+              ),
+
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -317,8 +979,6 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   // ============================================================
 
   Widget _buildMap() {
-    // Mumbai is only used as a temporary default
-    // before GPS location is obtained.
     const LatLng defaultLocation = LatLng(19.0760, 72.8777);
 
     return FlutterMap(
@@ -326,14 +986,14 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
       options: MapOptions(
         initialCenter: _userLocation ?? defaultLocation,
-        initialZoom: 14.0,
+        initialZoom: 17.0,
         minZoom: 5.0,
-        maxZoom: 19.0,
+        maxZoom: 20.0,
       ),
 
       children: [
         // ======================================================
-        // OPEN STREET MAP
+        // MAP TILES
         // ======================================================
 
         TileLayer(
@@ -342,19 +1002,15 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
         ),
 
         // ======================================================
-        // HEATMAP
+        // CROWD HEATMAP
         // ======================================================
         if (_crowdPoints.isNotEmpty)
           HeatMapLayer(
             heatMapDataSource: InMemoryHeatMapDataSource(data: _crowdPoints),
-
             heatMapOptions: HeatMapOptions(
               radius: 35,
               blurFactor: 0.8,
               minOpacity: 0.25,
-
-              // Removed "const" because it caused
-              // the constant evaluation error.
               gradient: {
                 0.0: Colors.green,
                 0.35: Colors.yellow,
@@ -365,27 +1021,29 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
           ),
 
         // ======================================================
-        // USER LOCATION MARKER
+        // REAL USER LOCATION MARKER
         // ======================================================
         if (_userLocation != null)
           MarkerLayer(
             markers: [
               Marker(
                 point: _userLocation!,
-                width: 50,
-                height: 50,
+                width: 70,
+                height: 70,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.18),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
 
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.blue.withValues(alpha: 0.20),
-                  ),
-
-                  child: const Icon(
-                    Icons.location_on,
-                    color: Colors.blue,
-                    size: 36,
-                  ),
+                    const Icon(Icons.location_on, color: Colors.blue, size: 38),
+                  ],
                 ),
               ),
             ],
@@ -397,14 +1055,13 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
         if (_isLoading) const Center(child: CircularProgressIndicator()),
 
         // ======================================================
-        // LOCATION ERROR
+        // ERROR
         // ======================================================
         if (_locationError)
           Center(
             child: Container(
               margin: const EdgeInsets.all(30),
               padding: const EdgeInsets.all(20),
-
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -412,10 +1069,8 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
                   BoxShadow(blurRadius: 10, color: Colors.black26),
                 ],
               ),
-
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-
                 children: [
                   const Icon(Icons.location_off, size: 40, color: Colors.red),
 
@@ -447,10 +1102,8 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   Widget _buildLegend() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
-
         children: [
           _buildLegendItem(Colors.green, 'Low'),
 
@@ -469,12 +1122,10 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   Widget _buildLegendItem(Color color, String label) {
     return Row(
       mainAxisSize: MainAxisSize.min,
-
       children: [
         Container(
           width: 12,
           height: 12,
-
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
 
@@ -495,11 +1146,9 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   Widget _buildCrowdCard() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-
       child: AppCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-
           children: [
             const Text(
               'Crowd Overview',
@@ -519,8 +1168,6 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
             Row(
               children: [
-                // CURRENT CROWD
-
                 Expanded(
                   child: _buildCrowdInfo(
                     Icons.groups,
@@ -532,7 +1179,6 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
                 Container(width: 1, height: 45, color: Colors.grey),
 
-                // DENSITY
                 Expanded(
                   child: _buildCrowdInfo(
                     Icons.percent,

@@ -11,10 +11,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
+   
   # Network
   http: ^1.6.0
-
+  
+  crypto: ^3.0.6 
+  
   # UI
   google_fonts: ^6.2.1
 

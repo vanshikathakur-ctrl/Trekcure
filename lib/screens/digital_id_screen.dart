@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/app_theme.dart';
+
 import 'package:trekcure/services/trekcure_api_service.dart';
 
 class DigitalIdScreen extends StatefulWidget {
@@ -21,6 +22,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
   Map<String, dynamic>? _credential;
   String? _touristId;
   String? _credentialHash;
+  String? _medicalInformationHash;
 
   String _userName = '';
   String _userId = '';
@@ -42,6 +44,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
       _credential = null;
       _touristId = null;
       _credentialHash = null;
+      _medicalInformationHash = null;
     });
 
     try {
@@ -68,8 +71,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
       if (metadata != null) {
         final metadataName = metadata['full_name'] ?? metadata['name'];
 
-        if (metadataName != null &&
-            metadataName.toString().trim().isNotEmpty) {
+        if (metadataName != null && metadataName.toString().trim().isNotEmpty) {
           name = metadataName.toString().trim();
         }
       }
@@ -110,6 +112,9 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
             : null;
 
         _credentialHash = data['hash']?.toString();
+        _medicalInformationHash =
+            data['medical_information_hash']?.toString() ??
+            data['credential']?['medical_information_hash']?.toString();
 
         _loading = false;
       });
@@ -149,10 +154,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
         leading: const BackButton(),
         title: const Text(
           'Digital Travel ID',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         actions: [
           IconButton(
@@ -161,10 +163,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: _buildBody(),
-      ),
+      body: Padding(padding: const EdgeInsets.all(16), child: _buildBody()),
     );
   }
 
@@ -194,9 +193,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
     }
 
     if (_touristId == null || _credential == null) {
-      return const Center(
-        child: Text('Digital ID data is unavailable.'),
-      );
+      return const Center(child: Text('Digital ID data is unavailable.'));
     }
 
     return _buildDigitalId();
@@ -211,27 +208,17 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.error_outline,
-            color: AppColors.dangerRed,
-            size: 50,
-          ),
+          const Icon(Icons.error_outline, color: AppColors.dangerRed, size: 50),
           const SizedBox(height: 12),
           const Text(
             'Unable to create Digital ID',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 10),
           Text(
             _error ?? 'Unknown error',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColors.textGrey,
-              fontSize: 12,
-            ),
+            style: const TextStyle(color: AppColors.textGrey, fontSize: 12),
           ),
           const SizedBox(height: 20),
           ElevatedButton(
@@ -268,17 +255,10 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                   children: const [
                     Text(
                       'Verified Traveler',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
-                      ),
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
                     ),
                     Spacer(),
-                    Icon(
-                      Icons.check_circle,
-                      color: Colors.white,
-                      size: 18,
-                    ),
+                    Icon(Icons.check_circle, color: Colors.white, size: 18),
                   ],
                 ),
 
@@ -302,10 +282,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     _userName,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13,
-                    ),
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
                 ),
 
@@ -314,7 +291,6 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                 // =================================================
                 // QR CODE
                 // =================================================
-
                 Container(
                   height: 190,
                   width: 190,
@@ -336,10 +312,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
 
                 const Text(
                   'Scan to verify traveler identity',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 11,
-                  ),
+                  style: TextStyle(color: Colors.white70, fontSize: 11),
                 ),
 
                 const SizedBox(height: 18),
@@ -377,24 +350,16 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
           // ======================================================
           // USER INFORMATION
           // ======================================================
-
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'Traveler Information',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                 ),
                 const SizedBox(height: 12),
-                _InfoRow(
-                  icon: Icons.person,
-                  label: 'Name',
-                  value: _userName,
-                ),
+                _InfoRow(icon: Icons.person, label: 'Name', value: _userName),
                 const SizedBox(height: 8),
                 _InfoRow(
                   icon: Icons.badge,
@@ -410,16 +375,12 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
           // ======================================================
           // SECURITY INFORMATION
           // ======================================================
-
           AppCard(
             color: AppColors.infoBgLight,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.link,
-                  color: AppColors.infoBlue,
-                ),
+                const Icon(Icons.link, color: AppColors.infoBlue),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -427,9 +388,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                     children: [
                       const Text(
                         'Blockchain Credential',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 4),
                       const Text(
@@ -442,6 +401,55 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                       const SizedBox(height: 8),
                       Text(
                         hash,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          color: AppColors.textGrey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          AppCard(
+            color: AppColors.lightGreenBg,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.health_and_safety_outlined,
+                  color: AppColors.primaryGreen,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Medical Information Security',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Your medical details are stored separately. The Digital ID contains only a cryptographic hash used to detect changes to the medical record.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textGrey,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _medicalInformationHash == null ||
+                                _medicalInformationHash!.isEmpty
+                            ? 'Medical information not added yet.'
+                            : _medicalInformationHash!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -480,26 +488,16 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(
-          icon,
-          size: 20,
-          color: AppColors.infoBlue,
-        ),
+        Icon(icon, size: 20, color: AppColors.infoBlue),
         const SizedBox(width: 10),
         Text(
           '$label: ',
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppColors.textGrey,
-          ),
+          style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
           ),
         ),
       ],

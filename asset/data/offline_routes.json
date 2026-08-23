@@ -1,0 +1,70 @@
+{
+  "nodes": [
+    {
+      "id": "A",
+      "latitude": 19.0760,
+      "longitude": 72.8777,
+      "neighbors": ["B", "D"]
+    },
+    {
+      "id": "B",
+      "latitude": 19.0770,
+      "longitude": 72.8790,
+      "neighbors": ["A", "C", "E"]
+    },
+    {
+      "id": "C",
+      "latitude": 19.0785,
+      "longitude": 72.8800,
+      "neighbors": ["B", "F"]
+    },
+    {
+      "id": "D",
+      "latitude": 19.0748,
+      "longitude": 72.8790,
+      "neighbors": ["A", "E"]
+    },
+    {
+      "id": "E",
+      "latitude": 19.0765,
+      "longitude": 72.8810,
+      "neighbors": ["B", "D", "F", "G"]
+    },
+    {
+      "id": "F",
+      "latitude": 19.0790,
+      "longitude": 72.8820,
+      "neighbors": ["C", "E", "H"]
+    },
+    {
+      "id": "G",
+      "latitude": 19.0755,
+      "longitude": 72.8830,
+      "neighbors": ["E", "H"]
+    },
+    {
+      "id": "H",
+      "latitude": 19.0785,
+      "longitude": 72.8840,
+      "neighbors": ["F", "G"]
+    }
+  ],
+  "responders": [
+    {
+      "id": "FG001",
+      "name": "Forest Guard Unit 1",
+      "type": "forest_guard",
+      "nodeId": "A",
+      "latitude": 19.0760,
+      "longitude": 72.8777
+    },
+    {
+      "id": "POL001",
+      "name": "Police Unit 1",
+      "type": "police",
+      "nodeId": "H",
+      "latitude": 19.0785,
+      "longitude": 72.8840
+    }
+  ]
+}

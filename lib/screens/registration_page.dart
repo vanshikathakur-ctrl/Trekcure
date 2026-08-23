@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/app_theme.dart';
+import 'medical_information_screen.dart';
 
 class RegistrationPage extends StatefulWidget {
   const RegistrationPage({super.key});
@@ -30,13 +31,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
   Future<void> registerUser() async {
     final String name = _nameController.text.trim();
-
     final String email = _emailController.text.trim();
-
     final String phone = _phoneController.text.trim();
-
     final String password = _passwordController.text;
-
     final String confirmPassword = _confirmPasswordController.text;
 
     if (name.isEmpty) {
@@ -99,30 +96,34 @@ class _RegistrationPageState extends State<RegistrationPage> {
           title: 'Account Created',
           message:
               'Your TrekCure account has been created successfully.\n\n'
-              'Please check your email and verify your account '
-              'before logging in.',
+              'Please check your email and verify your account before logging in.\n\n'
+              'After you log in, open Medical Information to complete your emergency profile.',
         );
-      } else {
-        await showSuccessDialog(
-          title: 'Registration Successful',
-          message: 'Your TrekCure account has been created successfully.',
-        );
+
+        if (!mounted) return;
+        Navigator.pop(context);
+        return;
       }
+
+      await showSuccessDialog(
+        title: 'Registration Successful',
+        message:
+            'Your TrekCure account has been created successfully.\n\n'
+            'Next, add your medical information for emergency assistance.',
+      );
 
       if (!mounted) return;
 
-      Navigator.pop(context);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MedicalInformationScreen()),
+      );
     } on AuthException catch (e) {
-      debugPrint('SUPABASE AUTH ERROR: ${e.message}');
-
       showMessage(e.message);
     } on PostgrestException catch (e) {
-      debugPrint('SUPABASE DATABASE ERROR: ${e.message}');
-
       showMessage('Database error: ${e.message}');
     } catch (e) {
-      debugPrint('REGISTRATION ERROR: $e');
-
+      debugPrint('Registration error: $e');
       showMessage('Something went wrong. Please try again.');
     } finally {
       if (mounted) {

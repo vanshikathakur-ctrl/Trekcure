@@ -28,7 +28,7 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(
     SUPABASE_URL,
-    SUPABASE_KEY
+    SUPABASE_KEY,
 )
 
 
@@ -37,7 +37,7 @@ supabase: Client = create_client(
 # ============================================================
 
 app = FastAPI(
-    title="TrekCure API"
+    title="TrekCure API",
 )
 
 
@@ -60,7 +60,6 @@ weather_lock = asyncio.Lock()
 def get_weather_condition(weather_code: int | None):
 
     weather_conditions = {
-
         0: "Clear sky",
 
         1: "Mainly clear",
@@ -105,7 +104,7 @@ def get_weather_condition(weather_code: int | None):
 
     return weather_conditions.get(
         weather_code,
-        "Unknown"
+        "Unknown",
     )
 
 
@@ -115,11 +114,8 @@ def get_weather_condition(weather_code: int | None):
 
 @app.get("/weather")
 async def get_weather(
-
     latitude: float = 19.0760,
-
     longitude: float = 72.8777,
-
 ):
 
     # --------------------------------------------------------
@@ -132,7 +128,6 @@ async def get_weather(
     )
 
     current_time = time.time()
-
 
     # --------------------------------------------------------
     # CHECK CACHE
@@ -160,7 +155,6 @@ async def get_weather(
             return cached_data[
                 "data"
             ]
-
 
     # ========================================================
     # PREVENT DUPLICATE OPEN-METEO REQUESTS
@@ -197,7 +191,6 @@ async def get_weather(
                     "data"
                 ]
 
-
         # ----------------------------------------------------
         # OPEN-METEO API
         # ----------------------------------------------------
@@ -205,7 +198,6 @@ async def get_weather(
         weather_url = (
             "https://api.open-meteo.com/v1/forecast"
         )
-
 
         params = {
 
@@ -230,14 +222,12 @@ async def get_weather(
                 "auto",
         }
 
-
         try:
 
             timeout = httpx.Timeout(
                 15.0,
                 connect=10.0,
             )
-
 
             async with httpx.AsyncClient(
                 timeout=timeout
@@ -257,7 +247,6 @@ async def get_weather(
                     },
 
                 )
-
 
             # ------------------------------------------------
             # RATE LIMIT
@@ -282,7 +271,6 @@ async def get_weather(
                         cache_key
                     ]["data"]
 
-
                 raise HTTPException(
 
                     status_code=429,
@@ -294,17 +282,13 @@ async def get_weather(
 
                 )
 
-
             response.raise_for_status()
 
-
             data = response.json()
-
 
             current = data.get(
                 "current"
             )
-
 
             if current is None:
 
@@ -319,7 +303,6 @@ async def get_weather(
 
                 )
 
-
             # ------------------------------------------------
             # GET VALUES
             # ------------------------------------------------
@@ -328,11 +311,9 @@ async def get_weather(
                 "weather_code"
             )
 
-
             condition = get_weather_condition(
                 weather_code
             )
-
 
             weather_data = {
 
@@ -374,7 +355,6 @@ async def get_weather(
 
             }
 
-
             # ------------------------------------------------
             # SAVE TO CACHE
             # ------------------------------------------------
@@ -391,19 +371,15 @@ async def get_weather(
 
             }
 
-
             print(
                 "WEATHER DATA FETCHED SUCCESSFULLY"
             )
 
-
             return weather_data
-
 
         except HTTPException:
 
             raise
-
 
         except httpx.HTTPStatusError as e:
 
@@ -415,7 +391,6 @@ async def get_weather(
                 str(e)
             )
 
-
             # Return old cached data if available
 
             if cache_key in weather_cache:
@@ -427,7 +402,6 @@ async def get_weather(
                 return weather_cache[
                     cache_key
                 ]["data"]
-
 
             raise HTTPException(
 
@@ -439,7 +413,6 @@ async def get_weather(
 
             )
 
-
         except httpx.RequestError as e:
 
             print(
@@ -449,7 +422,6 @@ async def get_weather(
             print(
                 str(e)
             )
-
 
             # Return old cached data if available
 
@@ -462,7 +434,6 @@ async def get_weather(
                 return weather_cache[
                     cache_key
                 ]["data"]
-
 
             raise HTTPException(
 
@@ -474,7 +445,6 @@ async def get_weather(
 
             )
 
-
         except Exception as e:
 
             print(
@@ -484,7 +454,6 @@ async def get_weather(
             print(
                 str(e)
             )
-
 
             # Return old cached data if available
 
@@ -497,7 +466,6 @@ async def get_weather(
                 return weather_cache[
                     cache_key
                 ]["data"]
-
 
             raise HTTPException(
 
@@ -528,19 +496,91 @@ def create_digital_id(
     tourist: Tourist
 ):
 
-    # --------------------------------------------------------
-    # GENERATE UNIQUE TOURIST ID
-    # --------------------------------------------------------
+    print("========================================")
+    print("CREATE DIGITAL ID REQUEST")
+    print("USER ID:", tourist.user_id)
+    print("NAME:", tourist.name)
+    print("AGE:", tourist.age)
+    print("========================================")
+
+    # ========================================================
+    # 1. GENERATE UNIQUE TOURIST ID
+    # ========================================================
 
     tourist_id = (
         "TC-" +
-        str(uuid.uuid4())[:8]
+        str(uuid.uuid4())[:8].upper()
     )
 
+    # ========================================================
+    # 2. GET MEDICAL INFORMATION HASH
+    #
+    # The actual medical information is NOT put inside
+    # the Digital ID.
+    #
+    # Only the SHA-256 hash is associated with the ID.
+    # ========================================================
 
-    # --------------------------------------------------------
-    # CREATE DIGITAL ID CREDENTIAL
-    # --------------------------------------------------------
+    medical_information_hash = None
+
+    try:
+
+        medical_result = (
+
+            supabase
+
+            .table(
+                "profiles"
+            )
+
+            .select(
+                "medical_information_hash"
+            )
+
+            .eq(
+                "id",
+                tourist.user_id
+            )
+
+            .maybe_single()
+
+            .execute()
+
+        )
+
+        if medical_result.data:
+
+            medical_information_hash = (
+                medical_result.data.get(
+                    "medical_information_hash"
+                )
+            )
+
+        print(
+            "MEDICAL INFORMATION HASH:",
+            medical_information_hash,
+        )
+
+    except Exception as e:
+
+        print(
+            "MEDICAL INFORMATION HASH LOOKUP ERROR:"
+        )
+
+        print(
+            str(e)
+        )
+
+        # We don't immediately fail the Digital ID here.
+        #
+        # This allows users who do not yet have medical
+        # information to still create a Digital ID.
+
+        medical_information_hash = None
+
+    # ========================================================
+    # 3. CREATE DIGITAL ID CREDENTIAL
+    # ========================================================
 
     credential = {
 
@@ -573,12 +613,20 @@ def create_digital_id(
                 )
             ),
 
+        # ----------------------------------------------------
+        # MEDICAL INFORMATION HASH
+        #
+        # Only the hash is stored in the credential.
+        # The actual medical information is not exposed.
+        # ----------------------------------------------------
+
+        "medical_information_hash":
+            medical_information_hash,
     }
 
-
-    # --------------------------------------------------------
-    # GENERATE SHA-256 HASH
-    # --------------------------------------------------------
+    # ========================================================
+    # 4. CONVERT CREDENTIAL TO SORTED JSON
+    # ========================================================
 
     credential_data = json.dumps(
 
@@ -586,19 +634,36 @@ def create_digital_id(
 
         sort_keys=True,
 
+        separators=(
+            ",",
+            ":"
+        ),
+
     )
 
+    # ========================================================
+    # 5. GENERATE SHA-256 HASH
+    # ========================================================
 
     credential_hash = hashlib.sha256(
 
-        credential_data.encode()
+        credential_data.encode(
+            "utf-8"
+        )
 
     ).hexdigest()
 
+    print(
+        "DIGITAL ID HASH:"
+    )
 
-    # --------------------------------------------------------
-    # STORE HASH IN SUPABASE
-    # --------------------------------------------------------
+    print(
+        credential_hash
+    )
+
+    # ========================================================
+    # 6. STORE HASH IN SUPABASE
+    # ========================================================
 
     try:
 
@@ -629,8 +694,19 @@ def create_digital_id(
 
         )
 
+        print(
+            "DIGITAL ID HASH SAVED TO SUPABASE"
+        )
 
     except Exception as e:
+
+        print(
+            "DIGITAL ID SUPABASE ERROR:"
+        )
+
+        print(
+            str(e)
+        )
 
         raise HTTPException(
 
@@ -645,10 +721,9 @@ def create_digital_id(
 
         )
 
-
-    # --------------------------------------------------------
-    # CHECK PROFILE
-    # --------------------------------------------------------
+    # ========================================================
+    # 7. CHECK PROFILE UPDATE
+    # ========================================================
 
     if not result.data:
 
@@ -665,12 +740,11 @@ def create_digital_id(
 
         )
 
+    # ========================================================
+    # 8. RETURN DIGITAL ID
+    # ========================================================
 
-    # --------------------------------------------------------
-    # RETURN DIGITAL ID
-    # --------------------------------------------------------
-
-    return {
+    response = {
 
         "tourist_id":
             tourist_id,
@@ -681,7 +755,20 @@ def create_digital_id(
         "hash":
             credential_hash,
 
+        "medical_information_hash":
+            medical_information_hash,
+
     }
+
+    print("========================================")
+    print("DIGITAL ID CREATED SUCCESSFULLY")
+    print(
+        "TOURIST ID:",
+        tourist_id
+    )
+    print("========================================")
+
+    return response
 
 
 # ============================================================
@@ -700,9 +787,14 @@ def verify_digital_id(
     data: VerificationRequest
 ):
 
-    # --------------------------------------------------------
-    # GENERATE HASH FROM PROVIDED CREDENTIAL
-    # --------------------------------------------------------
+    print("========================================")
+    print("DIGITAL ID VERIFICATION REQUEST")
+    print("USER ID:", data.user_id)
+    print("========================================")
+
+    # ========================================================
+    # 1. GENERATE HASH FROM PROVIDED CREDENTIAL
+    # ========================================================
 
     credential_data = json.dumps(
 
@@ -710,19 +802,24 @@ def verify_digital_id(
 
         sort_keys=True,
 
-    )
+        separators=(
+            ",",
+            ":"
+        ),
 
+    )
 
     current_hash = hashlib.sha256(
 
-        credential_data.encode()
+        credential_data.encode(
+            "utf-8"
+        )
 
     ).hexdigest()
 
-
-    # --------------------------------------------------------
-    # GET STORED HASH
-    # --------------------------------------------------------
+    # ========================================================
+    # 2. GET STORED HASH
+    # ========================================================
 
     try:
 
@@ -746,14 +843,21 @@ def verify_digital_id(
 
             )
 
-            .single()
+            .maybe_single()
 
             .execute()
 
         )
 
-
     except Exception as e:
+
+        print(
+            "DIGITAL ID VERIFICATION SUPABASE ERROR:"
+        )
+
+        print(
+            str(e)
+        )
 
         raise HTTPException(
 
@@ -768,10 +872,9 @@ def verify_digital_id(
 
         )
 
-
-    # --------------------------------------------------------
-    # CHECK DIGITAL ID
-    # --------------------------------------------------------
+    # ========================================================
+    # 3. CHECK DIGITAL ID
+    # ========================================================
 
     if (
 
@@ -795,17 +898,19 @@ def verify_digital_id(
 
         }
 
-
     stored_hash = result.data[
         "digital_id_hash"
     ]
 
-
-    # --------------------------------------------------------
-    # COMPARE HASHES
-    # --------------------------------------------------------
+    # ========================================================
+    # 4. COMPARE HASHES
+    # ========================================================
 
     if current_hash == stored_hash:
+
+        print(
+            "DIGITAL ID VERIFIED SUCCESSFULLY"
+        )
 
         return {
 
@@ -817,6 +922,9 @@ def verify_digital_id(
 
         }
 
+    print(
+        "DIGITAL ID VERIFICATION FAILED"
+    )
 
     return {
 
@@ -825,5 +933,26 @@ def verify_digital_id(
 
         "message":
             "Invalid identity",
+
+    }
+
+
+# ============================================================
+# HEALTH CHECK
+# ============================================================
+
+@app.get("/")
+def root():
+
+    return {
+
+        "status":
+            "online",
+
+        "service":
+            "TrekCure API",
+
+        "message":
+            "TrekCure backend is running.",
 
     }
