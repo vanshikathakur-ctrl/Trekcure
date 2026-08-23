@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_heatmap/flutter_map_heatmap.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 import '../theme/app_theme.dart';
@@ -14,12 +16,11 @@ class MapCrowdScreen extends StatefulWidget {
   const MapCrowdScreen({super.key});
 
   // Latest real location available from this screen.
-  // Other parts of the app can access these values later.
   static Position? latestPosition;
-  static int? latestFloor;
 
   @override
-  State<MapCrowdScreen> createState() => _MapCrowdScreenState();
+  State<MapCrowdScreen> createState() =>
+      _MapCrowdScreenState();
 }
 
 class _MapCrowdScreenState extends State<MapCrowdScreen> {
@@ -30,10 +31,37 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   final MapController _mapController = MapController();
 
   // ============================================================
+  // SEARCH
+  // ============================================================
+
+  final TextEditingController _searchController =
+      TextEditingController();
+
+  Timer? _searchDebounce;
+
+  List<_SearchPlace> _searchResults = [];
+
+  bool _isSearching = false;
+
+  // ============================================================
+  // DESTINATION / ROUTE
+  // ============================================================
+
+  LatLng? _destination;
+
+  List<LatLng> _routePoints = [];
+
+  double? _routeDistanceKm;
+  double? _routeDurationMinutes;
+
+  bool _isLoadingRoute = false;
+
+  // ============================================================
   // LOCATION
   // ============================================================
 
   LatLng? _userLocation;
+
   Position? _bestPosition;
 
   StreamSubscription<Position>? _locationSubscription;
@@ -45,13 +73,12 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   bool _isGettingPreciseLocation = false;
   bool _precisePermission = false;
 
-  String _locationStatus = 'Getting precise location...';
+  String _locationStatus =
+      'Getting precise location...';
 
   double? _accuracyMeters;
   double? _altitudeMeters;
   double? _altitudeAccuracyMeters;
-
-  String _floorText = 'Floor: Not available';
 
   // ============================================================
   // CROWD
@@ -82,6 +109,9 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   void dispose() {
     _locationSubscription?.cancel();
     _locationRetryTimer?.cancel();
+    _searchDebounce?.cancel();
+
+    _searchController.dispose();
 
     super.dispose();
   }
@@ -100,7 +130,8 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
         _isLoading = true;
         _locationError = false;
         _isGettingPreciseLocation = true;
-        _locationStatus = 'Checking precise location...';
+        _locationStatus =
+            'Checking precise location...';
       });
     }
 
@@ -109,7 +140,8 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
       // LOCATION SERVICE
       // ========================================================
 
-      final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final bool serviceEnabled =
+          await Geolocator.isLocationServiceEnabled();
 
       if (!serviceEnabled) {
         _showLocationError(
@@ -122,18 +154,23 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
       // PERMISSION
       // ========================================================
 
-      LocationPermission permission = await Geolocator.checkPermission();
+      LocationPermission permission =
+          await Geolocator.checkPermission();
 
       if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
+        permission =
+            await Geolocator.requestPermission();
       }
 
       if (permission == LocationPermission.denied) {
-        _showLocationError('Location permission was denied.');
+        _showLocationError(
+          'Location permission was denied.',
+        );
         return;
       }
 
-      if (permission == LocationPermission.deniedForever) {
+      if (permission ==
+          LocationPermission.deniedForever) {
         _showLocationError(
           'Location permission is permanently denied. Please enable it in device settings.',
         );
@@ -148,12 +185,14 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
         final LocationAccuracyStatus accuracyStatus =
             await Geolocator.getLocationAccuracy();
 
-        _precisePermission = accuracyStatus == LocationAccuracyStatus.precise;
+        _precisePermission =
+            accuracyStatus ==
+                LocationAccuracyStatus.precise;
       } catch (e) {
-        debugPrint('PRECISE LOCATION CHECK ERROR: $e');
+        debugPrint(
+          'PRECISE LOCATION CHECK ERROR: $e',
+        );
 
-        // Continue with high-accuracy requests if the
-        // platform does not support the accuracy check.
         _precisePermission = true;
       }
 
@@ -169,17 +208,22 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
       if (mounted) {
         setState(() {
-          _locationStatus = 'Finding your most accurate GPS position...';
+          _locationStatus =
+              'Finding your most accurate GPS position...';
         });
       }
 
       for (int i = 0; i < 6; i++) {
         try {
-          final Position position = await Geolocator.getCurrentPosition(
-            locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.bestForNavigation,
+          final Position position =
+              await Geolocator.getCurrentPosition(
+            locationSettings:
+                const LocationSettings(
+              accuracy:
+                  LocationAccuracy.bestForNavigation,
               distanceFilter: 0,
-              timeLimit: Duration(seconds: 15),
+              timeLimit:
+                  Duration(seconds: 15),
             ),
           );
 
@@ -190,10 +234,11 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
             'accuracy=${position.accuracy}m',
           );
 
-          // Keep the reading with the smallest reported
-          // horizontal accuracy.
+          // Keep the reading with the smallest
+          // reported horizontal accuracy.
           if (bestPosition == null ||
-              position.accuracy < bestPosition.accuracy) {
+              position.accuracy <
+                  bestPosition.accuracy) {
             bestPosition = position;
           }
 
@@ -205,14 +250,18 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
             });
           }
 
-          // A very good phone GPS result.
+          // Stop early when a very good reading is found.
           if (position.accuracy <= 5) {
             break;
           }
         } on TimeoutException catch (e) {
-          debugPrint('GPS READING TIMEOUT ${i + 1}: $e');
+          debugPrint(
+            'GPS READING TIMEOUT ${i + 1}: $e',
+          );
         } catch (e) {
-          debugPrint('GPS READING ERROR ${i + 1}: $e');
+          debugPrint(
+            'GPS READING ERROR ${i + 1}: $e',
+          );
         }
       }
 
@@ -226,10 +275,13 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
               await Geolocator.getLastKnownPosition();
 
           if (lastKnownPosition != null) {
-            bestPosition = lastKnownPosition;
+            bestPosition =
+                lastKnownPosition;
           }
         } catch (e) {
-          debugPrint('LAST KNOWN LOCATION ERROR: $e');
+          debugPrint(
+            'LAST KNOWN LOCATION ERROR: $e',
+          );
         }
       }
 
@@ -248,7 +300,10 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
       // APPLY BEST LOCATION
       // ========================================================
 
-      await _updateLocation(bestPosition, moveMap: true);
+      await _updateLocation(
+        bestPosition,
+        moveMap: true,
+      );
 
       // ========================================================
       // START CONTINUOUS TRACKING
@@ -263,13 +318,21 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
         _isGettingPreciseLocation = false;
       });
     } on TimeoutException catch (e) {
-      debugPrint('GPS MAIN TIMEOUT: $e');
+      debugPrint(
+        'GPS MAIN TIMEOUT: $e',
+      );
 
-      _showLocationError('GPS took too long to get an accurate location.');
+      _showLocationError(
+        'GPS took too long to get an accurate location.',
+      );
     } catch (e) {
-      debugPrint('GPS MAIN ERROR: $e');
+      debugPrint(
+        'GPS MAIN ERROR: $e',
+      );
 
-      _showLocationError('Unable to get your current location.');
+      _showLocationError(
+        'Unable to get your current location.',
+      );
     }
   }
 
@@ -282,18 +345,35 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
     _locationSubscription =
         Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.bestForNavigation,
-            distanceFilter: 5,
-          ),
-        ).listen(
-          (Position position) async {
-            await _updateLocation(position, moveMap: false);
-          },
-          onError: (Object error) {
-            debugPrint('LOCATION STREAM ERROR: $error');
-          },
+      locationSettings:
+          const LocationSettings(
+        accuracy:
+            LocationAccuracy.bestForNavigation,
+        distanceFilter: 5,
+      ),
+    ).listen(
+      (Position position) async {
+        await _updateLocation(
+          position,
+          moveMap: false,
         );
+
+        // Recalculate the route from the user's
+        // new location if a destination is selected.
+        if (_destination != null &&
+            mounted) {
+          await _getRouteToDestination(
+            _destination!,
+            showLoading: false,
+          );
+        }
+      },
+      onError: (Object error) {
+        debugPrint(
+          'LOCATION STREAM ERROR: $error',
+        );
+      },
+    );
   }
 
   // ============================================================
@@ -306,17 +386,20 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   }) async {
     if (!mounted) return;
 
-    // If we already have a much better reading, ignore a
-    // significantly worse one.
+    // Ignore a significantly worse reading when a
+    // better reading is already available.
     if (_bestPosition != null &&
-        position.accuracy > _bestPosition!.accuracy + 20 &&
+        position.accuracy >
+            _bestPosition!.accuracy + 20 &&
         position.accuracy > 30) {
       return;
     }
 
-    _bestPosition = position;
+    _bestPosition =
+        position;
 
-    final LatLng currentLocation = LatLng(
+    final LatLng currentLocation =
+        LatLng(
       position.latitude,
       position.longitude,
     );
@@ -325,107 +408,530 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
     // ACCURACY
     // ========================================================
 
-    final double accuracy = position.accuracy;
+    final double accuracy =
+        position.accuracy;
 
     String accuracyText;
 
     if (accuracy <= 5) {
-      accuracyText = 'Very accurate • ±${accuracy.toStringAsFixed(1)} m';
+      accuracyText =
+          'Very accurate • ±${accuracy.toStringAsFixed(1)} m';
     } else if (accuracy <= 10) {
-      accuracyText = 'High accuracy • ±${accuracy.toStringAsFixed(1)} m';
+      accuracyText =
+          'High accuracy • ±${accuracy.toStringAsFixed(1)} m';
     } else if (accuracy <= 25) {
-      accuracyText = 'Good accuracy • ±${accuracy.toStringAsFixed(1)} m';
+      accuracyText =
+          'Good accuracy • ±${accuracy.toStringAsFixed(1)} m';
     } else if (accuracy <= 50) {
-      accuracyText = 'Moderate accuracy • ±${accuracy.toStringAsFixed(1)} m';
+      accuracyText =
+          'Moderate accuracy • ±${accuracy.toStringAsFixed(1)} m';
     } else {
-      accuracyText = 'Low accuracy • ±${accuracy.toStringAsFixed(1)} m';
+      accuracyText =
+          'Low accuracy • ±${accuracy.toStringAsFixed(1)} m';
     }
 
     // ========================================================
     // ALTITUDE
     // ========================================================
-    //
-    // Your installed Geolocator API does not expose
-    // Position.hasAltitude, so use altitude directly.
-    // ========================================================
 
-    final double? altitude = position.altitude;
+    final double? altitude =
+        position.altitude;
 
-    final double? altitudeAccuracy = position.altitudeAccuracy;
-
-    // ========================================================
-    // FLOOR
-    // ========================================================
-
-    final int? floor = position.floor;
-
-    if (floor != null) {
-      _floorText = 'Floor: ${_formatFloor(floor)}';
-
-      MapCrowdScreen.latestFloor = floor;
-    } else {
-      _floorText = 'Floor: Not available';
-
-      MapCrowdScreen.latestFloor = null;
-    }
+    final double? altitudeAccuracy =
+        position.altitudeAccuracy;
 
     // ========================================================
     // SAVE LATEST REAL LOCATION
     // ========================================================
 
-    MapCrowdScreen.latestPosition = position;
+    MapCrowdScreen.latestPosition =
+        position;
 
     if (!mounted) return;
 
     setState(() {
-      _userLocation = currentLocation;
+      _userLocation =
+          currentLocation;
 
-      _bestPosition = position;
+      _bestPosition =
+          position;
 
-      _accuracyMeters = accuracy;
+      _accuracyMeters =
+          accuracy;
 
-      _altitudeMeters = altitude;
+      _altitudeMeters =
+          altitude;
 
-      _altitudeAccuracyMeters = altitudeAccuracy;
+      _altitudeAccuracyMeters =
+          altitudeAccuracy;
 
-      _locationStatus = accuracyText;
+      _locationStatus =
+          accuracyText;
 
-      _locationError = false;
+      _locationError =
+          false;
 
-      _isLoading = false;
+      _isLoading =
+          false;
     });
 
-    // Keep the crowd visualization centered around the
-    // user's actual current GPS position.
-    _generateCrowdData(currentLocation);
+    // Keep crowd visualization centered around
+    // the user's actual current position.
+    _generateCrowdData(
+      currentLocation,
+    );
 
     if (moveMap) {
-      _mapController.move(currentLocation, 17.0);
+      _mapController.move(
+        currentLocation,
+        17.0,
+      );
     }
   }
 
   // ============================================================
-  // FLOOR FORMAT
+  // SEARCH INPUT
   // ============================================================
 
-  String _formatFloor(int floor) {
-    if (floor == 0) {
-      return 'Ground';
+  void _onSearchChanged(
+    String value,
+  ) {
+    _searchDebounce?.cancel();
+
+    if (value.trim().length < 2) {
+      if (mounted) {
+        setState(() {
+          _searchResults = [];
+          _isSearching = false;
+        });
+      }
+      return;
     }
 
-    if (floor == 1) {
-      return '1st';
+    _searchDebounce =
+        Timer(
+      const Duration(milliseconds: 650),
+      () {
+        _searchPlaces(
+          value.trim(),
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // SEARCH PLACES
+  // ============================================================
+
+  Future<void> _searchPlaces(
+    String query,
+  ) async {
+    if (query.isEmpty) {
+      return;
     }
 
-    if (floor == 2) {
-      return '2nd';
+    if (!mounted) return;
+
+    setState(() {
+      _isSearching = true;
+    });
+
+    try {
+      final Uri url = Uri.https(
+        'nominatim.openstreetmap.org',
+        '/search',
+        {
+          'q': query,
+          'format': 'jsonv2',
+          'limit': '5',
+          'addressdetails': '1',
+        },
+      );
+
+      final http.Response response =
+          await http.get(
+        url,
+        headers: const {
+          'User-Agent':
+              'TrekCure/1.0 (tourist-safety-app)',
+          'Accept':
+              'application/json',
+        },
+      ).timeout(
+        const Duration(seconds: 10),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Search service returned ${response.statusCode}',
+        );
+      }
+
+      final dynamic decoded =
+          jsonDecode(response.body);
+
+      if (decoded is! List) {
+        throw Exception(
+          'Invalid search response',
+        );
+      }
+
+      final List<_SearchPlace> results =
+          decoded
+              .whereType<
+                  Map<String, dynamic>>()
+              .map(
+                (
+                  Map<String, dynamic> item,
+                ) {
+                  final double? latitude =
+                      double.tryParse(
+                    '${item['lat'] ?? ''}',
+                  );
+
+                  final double? longitude =
+                      double.tryParse(
+                    '${item['lon'] ?? ''}',
+                  );
+
+                  if (latitude == null ||
+                      longitude == null) {
+                    return null;
+                  }
+
+                  return _SearchPlace(
+                    name:
+                        '${item['display_name'] ?? 'Unknown location'}',
+                    latitude:
+                        latitude,
+                    longitude:
+                        longitude,
+                  );
+                },
+              )
+              .whereType<
+                  _SearchPlace>()
+              .toList();
+
+      if (!mounted) return;
+
+      setState(() {
+        _searchResults =
+            results;
+        _isSearching =
+            false;
+      });
+    } catch (e) {
+      debugPrint(
+        'LOCATION SEARCH ERROR: $e',
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _searchResults = [];
+        _isSearching =
+            false;
+      });
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        const SnackBar(
+          content:
+              Text(
+            'Unable to search for that location.',
+          ),
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // SELECT SEARCH RESULT
+  // ============================================================
+
+  Future<void> _selectSearchPlace(
+    _SearchPlace place,
+  ) async {
+    FocusScope.of(context).unfocus();
+
+    _searchController.text =
+        place.name;
+
+    if (!mounted) return;
+
+    setState(() {
+      _searchResults = [];
+    });
+
+    final LatLng destination =
+        LatLng(
+      place.latitude,
+      place.longitude,
+    );
+
+    await _getRouteToDestination(
+      destination,
+      showLoading: true,
+    );
+  }
+
+  // ============================================================
+  // GET ROUTE
+  // ============================================================
+  //
+  // Uses OSRM for road routing.
+  // Start = user's REAL GPS location.
+  // End = searched location.
+  // ============================================================
+
+  Future<void> _getRouteToDestination(
+    LatLng destination, {
+    bool showLoading = true,
+  }) async {
+    final LatLng? start =
+        _userLocation;
+
+    if (start == null) {
+      _showMessage(
+        'Your current location is not available yet.',
+      );
+      return;
     }
 
-    if (floor == 3) {
-      return '3rd';
+    if (showLoading && mounted) {
+      setState(() {
+        _isLoadingRoute = true;
+        _routePoints = [];
+        _routeDistanceKm = null;
+        _routeDurationMinutes = null;
+      });
     }
 
-    return '${floor}th';
+    try {
+      final String coordinates =
+          '${start.longitude},${start.latitude};'
+          '${destination.longitude},${destination.latitude}';
+
+      final Uri url = Uri.parse(
+        'https://router.project-osrm.org/route/v1/driving/'
+        '$coordinates'
+        '?overview=full&geometries=geojson&steps=true',
+      );
+
+      final http.Response response =
+          await http.get(
+        url,
+        headers: const {
+          'User-Agent':
+              'TrekCure/1.0 (tourist-safety-app)',
+          'Accept':
+              'application/json',
+        },
+      ).timeout(
+        const Duration(seconds: 15),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Route service returned ${response.statusCode}',
+        );
+      }
+
+      final dynamic decoded =
+          jsonDecode(response.body);
+
+      if (decoded is! Map<String, dynamic>) {
+        throw Exception(
+          'Invalid route response',
+        );
+      }
+
+      final String code =
+          '${decoded['code'] ?? ''}';
+
+      if (code != 'Ok') {
+        throw Exception(
+          'No route found',
+        );
+      }
+
+      final List<dynamic> routes =
+          decoded['routes']
+                  as List<dynamic>? ??
+              [];
+
+      if (routes.isEmpty) {
+        throw Exception(
+          'No route found',
+        );
+      }
+
+      final Map<String, dynamic> route =
+          Map<String, dynamic>.from(
+        routes.first as Map,
+      );
+
+      final double distanceMeters =
+          (route['distance'] as num?)
+                  ?.toDouble() ??
+              0;
+
+      final double durationSeconds =
+          (route['duration'] as num?)
+                  ?.toDouble() ??
+              0;
+
+      final Map<String, dynamic> geometry =
+          Map<String, dynamic>.from(
+        route['geometry'] as Map,
+      );
+
+      final List<dynamic> coordinatesList =
+          geometry['coordinates']
+                  as List<dynamic>? ??
+              [];
+
+      final List<LatLng> routePoints =
+          [];
+
+      for (final dynamic item
+          in coordinatesList) {
+        if (item is List &&
+            item.length >= 2) {
+          final double? longitude =
+              (item[0] as num?)
+                  ?.toDouble();
+
+          final double? latitude =
+              (item[1] as num?)
+                  ?.toDouble();
+
+          if (latitude != null &&
+              longitude != null) {
+            routePoints.add(
+              LatLng(
+                latitude,
+                longitude,
+              ),
+            );
+          }
+        }
+      }
+
+      if (routePoints.isEmpty) {
+        throw Exception(
+          'Route geometry is empty',
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _destination =
+            destination;
+
+        _routePoints =
+            routePoints;
+
+        _routeDistanceKm =
+            distanceMeters / 1000;
+
+        _routeDurationMinutes =
+            durationSeconds / 60;
+
+        _isLoadingRoute =
+            false;
+      });
+
+      // ========================================================
+      // FIT MAP TO ENTIRE ROUTE
+      // ========================================================
+
+      WidgetsBinding.instance
+          .addPostFrameCallback(
+        (_) {
+          if (!mounted ||
+              _routePoints.isEmpty) {
+            return;
+          }
+
+          try {
+            final LatLngBounds bounds =
+                LatLngBounds.fromPoints(
+              _routePoints,
+            );
+
+            _mapController.fitCamera(
+              CameraFit.bounds(
+                bounds: bounds,
+                padding:
+                    const EdgeInsets.all(
+                  60,
+                ),
+              ),
+            );
+          } catch (e) {
+            debugPrint(
+              'FIT ROUTE CAMERA ERROR: $e',
+            );
+
+            _mapController.move(
+              destination,
+              14.0,
+            );
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint(
+        'ROUTE ERROR: $e',
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingRoute =
+            false;
+      });
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        const SnackBar(
+          content:
+              Text(
+            'Could not find a route to this location.',
+          ),
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // CLEAR ROUTE
+  // ============================================================
+
+  void _clearRoute() {
+    FocusScope.of(context).unfocus();
+
+    _searchController.clear();
+
+    if (!mounted) return;
+
+    setState(() {
+      _destination = null;
+      _routePoints = [];
+      _routeDistanceKm = null;
+      _routeDurationMinutes = null;
+      _searchResults = [];
+    });
+
+    if (_userLocation != null) {
+      _mapController.move(
+        _userLocation!,
+        17.0,
+      );
+    }
   }
 
   // ============================================================
@@ -435,97 +941,146 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   void _showApproximateLocationDialog() {
     if (!mounted) return;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+    WidgetsBinding.instance
+        .addPostFrameCallback(
+      (_) {
+        if (!mounted) return;
 
-      showDialog(
-        context: context,
-        builder: (BuildContext dialogContext) {
-          return AlertDialog(
-            title: const Text('Precise location is off'),
-            content: const Text(
-              'TrekCure has approximate location permission. For the best possible GPS accuracy, enable Precise Location in your device settings.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(dialogContext);
-                },
-                child: const Text('Later'),
+        showDialog(
+          context: context,
+          builder:
+              (
+            BuildContext dialogContext,
+          ) {
+            return AlertDialog(
+              title:
+                  const Text(
+                'Precise location is off',
               ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(dialogContext);
+              content:
+                  const Text(
+                'TrekCure has approximate location permission. For the best possible GPS accuracy, enable Precise Location in your device settings.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(
+                      dialogContext,
+                    );
+                  },
+                  child:
+                      const Text(
+                    'Later',
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(
+                      dialogContext,
+                    );
 
-                  Geolocator.openAppSettings();
-                },
-                child: const Text('Open Settings'),
-              ),
-            ],
-          );
-        },
-      );
-    });
+                    Geolocator
+                        .openAppSettings();
+                  },
+                  child:
+                      const Text(
+                    'Open Settings',
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   // ============================================================
   // CROWD DATA
   // ============================================================
   //
-  // IMPORTANT:
   // GPS location is real.
   // Crowd data below is still simulated.
   // ============================================================
 
-  void _generateCrowdData(LatLng center) {
-    final Random random = Random();
+  void _generateCrowdData(
+    LatLng center,
+  ) {
+    final Random random =
+        Random();
 
-    final List<WeightedLatLng> points = [];
+    final List<WeightedLatLng>
+        points = [];
 
-    double totalDensity = 0;
+    double totalDensity =
+        0;
 
-    for (int i = 0; i < 100; i++) {
-      final double latitudeOffset = (random.nextDouble() - 0.5) * 0.05;
+    for (int i = 0;
+        i < 100;
+        i++) {
+      final double latitudeOffset =
+          (random.nextDouble() -
+                  0.5) *
+              0.05;
 
-      final double longitudeOffset = (random.nextDouble() - 0.5) * 0.05;
+      final double longitudeOffset =
+          (random.nextDouble() -
+                  0.5) *
+              0.05;
 
-      final double density = 0.1 + random.nextDouble() * 0.9;
+      final double density =
+          0.1 +
+              random.nextDouble() *
+                  0.9;
 
-      totalDensity += density;
+      totalDensity +=
+          density;
 
       points.add(
         WeightedLatLng(
           LatLng(
-            center.latitude + latitudeOffset,
-            center.longitude + longitudeOffset,
+            center.latitude +
+                latitudeOffset,
+            center.longitude +
+                longitudeOffset,
           ),
           density,
         ),
       );
     }
 
-    final double averageDensity = totalDensity / points.length;
+    final double averageDensity =
+        totalDensity /
+            points.length;
 
-    final int percentage = (averageDensity * 100).round();
+    final int percentage =
+        (averageDensity * 100)
+            .round();
 
     String level;
 
     if (percentage <= 30) {
-      level = 'Low';
+      level =
+          'Low';
     } else if (percentage <= 70) {
-      level = 'Moderate';
+      level =
+          'Moderate';
     } else {
-      level = 'High';
+      level =
+          'High';
     }
 
     if (!mounted) return;
 
     setState(() {
-      _crowdPoints = points;
+      _crowdPoints =
+          points;
 
-      _density = percentage;
+      _density =
+          percentage;
 
-      _crowdLevel = level;
+      _crowdLevel =
+          level;
     });
   }
 
@@ -538,10 +1093,15 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
       const SnackBar(
-        content: Text('Location updated'),
-        duration: Duration(seconds: 1),
+        content:
+            Text(
+          'Location updated',
+        ),
+        duration:
+            Duration(seconds: 1),
       ),
     );
   }
@@ -556,7 +1116,10 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
       return;
     }
 
-    _mapController.move(_userLocation!, 18.0);
+    _mapController.move(
+      _userLocation!,
+      18.0,
+    );
   }
 
   // ============================================================
@@ -564,10 +1127,13 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   // ============================================================
 
   void _showLocationDetails() {
-    final Position? position = _bestPosition;
+    final Position? position =
+        _bestPosition;
 
     if (position == null) {
-      _showMessage('Location is not available yet.');
+      _showMessage(
+        'Location is not available yet.',
+      );
       return;
     }
 
@@ -575,31 +1141,57 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (BuildContext sheetContext) {
+      builder:
+          (
+        BuildContext sheetContext,
+      ) {
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+          child:
+              Padding(
+            padding:
+                const EdgeInsets.fromLTRB(
+              20,
+              4,
+              20,
+              24,
+            ),
+            child:
+                Column(
+              mainAxisSize:
+                  MainAxisSize.min,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
                 const Text(
                   'Precise GPS Location',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  style:
+                      TextStyle(
+                    fontSize: 20,
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
                 ),
 
-                const SizedBox(height: 18),
+                const SizedBox(
+                  height: 18,
+                ),
 
                 _detailRow(
                   Icons.location_on,
                   'Latitude',
-                  position.latitude.toStringAsFixed(7),
+                  position.latitude
+                      .toStringAsFixed(
+                    7,
+                  ),
                 ),
 
                 _detailRow(
                   Icons.location_on,
                   'Longitude',
-                  position.longitude.toStringAsFixed(7),
+                  position.longitude
+                      .toStringAsFixed(
+                    7,
+                  ),
                 ),
 
                 _detailRow(
@@ -614,39 +1206,42 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
                   '${_altitudeMeters?.toStringAsFixed(1) ?? '--'} m',
                 ),
 
-                if (_altitudeAccuracyMeters != null)
+                if (_altitudeAccuracyMeters !=
+                    null)
                   _detailRow(
                     Icons.vertical_align_center,
                     'Vertical accuracy',
                     '±${_altitudeAccuracyMeters!.toStringAsFixed(1)} m',
                   ),
 
-                _detailRow(
-                  Icons.layers_outlined,
-                  'Floor',
-                  _floorText.replaceFirst('Floor: ', ''),
+                const SizedBox(
+                  height: 12,
                 ),
-
-                _detailRow(
-                  Icons.meeting_room_outlined,
-                  'Room',
-                  'Not available from GPS',
-                ),
-
-                const SizedBox(height: 12),
 
                 Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.lightGreenBg,
-                    borderRadius: BorderRadius.circular(12),
+                  width:
+                      double.infinity,
+                  padding:
+                      const EdgeInsets.all(
+                    14,
                   ),
-                  child: const Text(
-                    'GPS can provide a highly accurate outdoor position, but it cannot reliably determine a specific room. Room-level positioning requires technologies such as BLE beacons, UWB, Wi-Fi fingerprinting, or a building indoor-positioning system.',
-                    style: TextStyle(
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        AppColors.lightGreenBg,
+                    borderRadius:
+                        BorderRadius.circular(
+                      12,
+                    ),
+                  ),
+                  child:
+                      const Text(
+                    'The location shown is the actual GPS position reported by the device. Accuracy depends on GPS signal quality, device hardware and the surrounding environment.',
+                    style:
+                        TextStyle(
                       fontSize: 12,
-                      color: AppColors.textGrey,
+                      color:
+                          AppColors.textGrey,
                       height: 1.4,
                     ),
                   ),
@@ -663,33 +1258,55 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   // DETAIL ROW
   // ============================================================
 
-  Widget _detailRow(IconData icon, String label, String value) {
+  Widget _detailRow(
+    IconData icon,
+    String label,
+    String value,
+  ) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding:
+          const EdgeInsets.only(
+        bottom: 13,
+      ),
+      child:
+          Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: AppColors.primaryGreen),
-
-          const SizedBox(width: 10),
-
+          Icon(
+            icon,
+            size: 20,
+            color:
+                AppColors.primaryGreen,
+          ),
+          const SizedBox(
+            width: 10,
+          ),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child:
+                Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
+                  style:
+                      const TextStyle(
                     fontSize: 11,
-                    color: AppColors.textGrey,
+                    color:
+                        AppColors.textGrey,
                   ),
                 ),
-
-                const SizedBox(height: 2),
-
+                const SizedBox(
+                  height: 2,
+                ),
                 Text(
                   value,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  style:
+                      const TextStyle(
+                    fontWeight:
+                        FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -703,33 +1320,44 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   // ERROR
   // ============================================================
 
-  void _showLocationError(String message) {
+  void _showLocationError(
+    String message,
+  ) {
     if (!mounted) return;
 
     setState(() {
       _isLoading = false;
-
-      _isGettingPreciseLocation = false;
-
+      _isGettingPreciseLocation =
+          false;
       _locationError = true;
-
-      _locationStatus = 'Location unavailable';
+      _locationStatus =
+          'Location unavailable';
     });
 
-    _showMessage(message);
+    _showMessage(
+      message,
+    );
   }
 
   // ============================================================
   // MESSAGE
   // ============================================================
 
-  void _showMessage(String message) {
+  void _showMessage(
+    String message,
+  ) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context)
+        .hideCurrentSnackBar();
 
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+        .showSnackBar(
+      SnackBar(
+        content:
+            Text(message),
+      ),
+    );
   }
 
   // ============================================================
@@ -737,69 +1365,485 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   // ============================================================
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
+      appBar:
+          AppBar(
+        title:
+            const Text(
           'Crowd Map',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style:
+              TextStyle(
+            fontWeight:
+                FontWeight.bold,
+          ),
         ),
-
         actions: [
           IconButton(
-            onPressed: _refreshLocation,
-            tooltip: 'Update location',
-            icon: const Icon(Icons.my_location),
+            onPressed:
+                _refreshLocation,
+            tooltip:
+                'Update location',
+            icon:
+                const Icon(
+              Icons.my_location,
+            ),
           ),
-
           IconButton(
-            onPressed: _showLocationDetails,
-            tooltip: 'Location details',
-            icon: const Icon(Icons.info_outline),
+            onPressed:
+                _showLocationDetails,
+            tooltip:
+                'Location details',
+            icon:
+                const Icon(
+              Icons.info_outline,
+            ),
           ),
-
           IconButton(
-            onPressed: () {
+            onPressed:
+                () {
               if (_userLocation == null) {
                 _getLocation();
               } else {
-                _generateCrowdData(_userLocation!);
+                _generateCrowdData(
+                  _userLocation!,
+                );
               }
             },
-            tooltip: 'Refresh crowd',
-            icon: const Icon(Icons.refresh),
+            tooltip:
+                'Refresh crowd',
+            icon:
+                const Icon(
+              Icons.refresh,
+            ),
           ),
         ],
       ),
 
-      body: Column(
+      body:
+          Column(
         children: [
+          // ======================================================
+          // SEARCH BAR
+          // ======================================================
+
+          _buildSearchSection(),
+
+          // ======================================================
+          // LOCATION CARD
+          // ======================================================
+
           _buildLocationCard(),
 
+          // ======================================================
+          // MAP
+          // ======================================================
+
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: _buildMap(),
+            child:
+                Padding(
+              padding:
+                  const EdgeInsets.fromLTRB(
+                16,
+                0,
+                16,
+                8,
+              ),
+              child:
+                  ClipRRect(
+                borderRadius:
+                    BorderRadius.circular(
+                  20,
+                ),
+                child:
+                    _buildMap(),
               ),
             ),
           ),
 
+          // ======================================================
+          // LEGEND
+          // ======================================================
+
           _buildLegend(),
+
+          // ======================================================
+          // CROWD
+          // ======================================================
 
           _buildCrowdCard(),
         ],
       ),
 
-      floatingActionButton: FloatingActionButton(
-        onPressed: _goToCurrentLocation,
-        tooltip: 'My Location',
-        child: const Icon(Icons.my_location),
+      floatingActionButton:
+          FloatingActionButton(
+        onPressed:
+            _goToCurrentLocation,
+        tooltip:
+            'My Location',
+        child:
+            const Icon(
+          Icons.my_location,
+        ),
       ),
 
-      bottomNavigationBar: const AppBottomNav(currentIndex: 1),
+      bottomNavigationBar:
+          const AppBottomNav(
+        currentIndex:
+            1,
+      ),
     );
+  }
+
+  // ============================================================
+  // SEARCH SECTION
+  // ============================================================
+
+  Widget _buildSearchSection() {
+    return Padding(
+      padding:
+          const EdgeInsets.fromLTRB(
+        16,
+        10,
+        16,
+        8,
+      ),
+      child:
+          Column(
+        children: [
+          Material(
+            elevation: 2,
+            borderRadius:
+                BorderRadius.circular(
+              16,
+            ),
+            child:
+                TextField(
+              controller:
+                  _searchController,
+              onChanged:
+                  _onSearchChanged,
+              textInputAction:
+                  TextInputAction.search,
+              decoration:
+                  InputDecoration(
+                hintText:
+                    'Search a location...',
+                prefixIcon:
+                    const Icon(
+                  Icons.search,
+                ),
+                suffixIcon:
+                    _searchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed:
+                                _clearRoute,
+                            icon:
+                                const Icon(
+                              Icons.clear,
+                            ),
+                          ),
+                filled:
+                    true,
+                fillColor:
+                    Colors.white,
+                border:
+                    OutlineInputBorder(
+                  borderRadius:
+                      BorderRadius.circular(
+                    16,
+                  ),
+                  borderSide:
+                      BorderSide.none,
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(
+                  vertical:
+                      15,
+                  horizontal:
+                      16,
+                ),
+              ),
+            ),
+          ),
+
+          // ====================================================
+          // SEARCH RESULTS
+          // ====================================================
+
+          if (_isSearching ||
+              _searchResults.isNotEmpty)
+            const SizedBox(
+              height:
+                  6,
+            ),
+
+          if (_isSearching)
+            const Align(
+              alignment:
+                  Alignment.centerLeft,
+              child:
+                  Padding(
+                padding:
+                    EdgeInsets.all(
+                  10,
+                ),
+                child:
+                    Row(
+                  children: [
+                    SizedBox(
+                      width:
+                          18,
+                      height:
+                          18,
+                      child:
+                          CircularProgressIndicator(
+                        strokeWidth:
+                            2,
+                      ),
+                    ),
+                    SizedBox(
+                      width:
+                          10,
+                    ),
+                    Text(
+                      'Searching locations...',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          if (!_isSearching &&
+              _searchResults.isNotEmpty)
+            Container(
+              width:
+                  double.infinity,
+              constraints:
+                  const BoxConstraints(
+                maxHeight:
+                    230,
+              ),
+              decoration:
+                  BoxDecoration(
+                color:
+                    Colors.white,
+                borderRadius:
+                    BorderRadius.circular(
+                  14,
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius:
+                        10,
+                    offset:
+                        Offset(
+                      0,
+                      3,
+                    ),
+                    color:
+                        Colors.black12,
+                  ),
+                ],
+              ),
+              child:
+                  ListView.separated(
+                shrinkWrap:
+                    true,
+                padding:
+                    EdgeInsets.zero,
+                itemCount:
+                    _searchResults.length,
+                separatorBuilder:
+                    (_, __) =>
+                        const Divider(
+                  height:
+                      1,
+                ),
+                itemBuilder:
+                    (
+                  context,
+                  index,
+                ) {
+                  final _SearchPlace place =
+                      _searchResults[index];
+
+                  return ListTile(
+                    leading:
+                        const CircleAvatar(
+                      backgroundColor:
+                          AppColors.lightGreenBg,
+                      child:
+                          Icon(
+                        Icons.location_on,
+                        color:
+                            AppColors.primaryGreen,
+                      ),
+                    ),
+                    title:
+                        Text(
+                      place.name,
+                      maxLines:
+                          2,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          const TextStyle(
+                        fontSize:
+                            13,
+                        fontWeight:
+                            FontWeight.w600,
+                      ),
+                    ),
+                    onTap:
+                        () =>
+                            _selectSearchPlace(
+                      place,
+                    ),
+                  );
+                },
+              ),
+            ),
+
+          // ====================================================
+          // ROUTE INFORMATION
+          // ====================================================
+
+          if (_routeDistanceKm != null)
+            Padding(
+              padding:
+                  const EdgeInsets.only(
+                top:
+                    6,
+              ),
+              child:
+                  _buildRouteInfo(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // ROUTE INFO
+  // ============================================================
+
+  Widget _buildRouteInfo() {
+    return Container(
+      width:
+          double.infinity,
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal:
+            14,
+        vertical:
+            10,
+      ),
+      decoration:
+          BoxDecoration(
+        color:
+            AppColors.lightGreenBg,
+        borderRadius:
+            BorderRadius.circular(
+          12,
+        ),
+      ),
+      child:
+          Row(
+        children: [
+          const Icon(
+            Icons.route,
+            color:
+                AppColors.primaryGreen,
+            size:
+                20,
+          ),
+
+          const SizedBox(
+            width:
+                8,
+          ),
+
+          Expanded(
+            child:
+                Text(
+              '${_routeDistanceKm!.toStringAsFixed(1)} km'
+              ' • '
+              '${_formatRouteDuration(
+                _routeDurationMinutes ?? 0,
+              )}',
+              style:
+                  const TextStyle(
+                fontWeight:
+                    FontWeight.bold,
+                fontSize:
+                    12,
+              ),
+            ),
+          ),
+
+          if (_isLoadingRoute)
+            const SizedBox(
+              width:
+                  18,
+              height:
+                  18,
+              child:
+                  CircularProgressIndicator(
+                strokeWidth:
+                    2,
+              ),
+            ),
+
+          IconButton(
+            onPressed:
+                _clearRoute,
+            tooltip:
+                'Clear route',
+            icon:
+                const Icon(
+              Icons.close,
+              size:
+                  19,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // FORMAT ROUTE TIME
+  // ============================================================
+
+  String _formatRouteDuration(
+    double minutes,
+  ) {
+    if (minutes < 1) {
+      return '<1 min';
+    }
+
+    final int roundedMinutes =
+        minutes.round();
+
+    if (roundedMinutes < 60) {
+      return '$roundedMinutes min';
+    }
+
+    final int hours =
+        roundedMinutes ~/ 60;
+
+    final int remainingMinutes =
+        roundedMinutes % 60;
+
+    if (remainingMinutes == 0) {
+      return '${hours}h';
+    }
+
+    return '${hours}h ${remainingMinutes}m';
   }
 
   // ============================================================
@@ -808,44 +1852,75 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
   Widget _buildLocationCard() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-      child: AppCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      padding:
+          const EdgeInsets.fromLTRB(
+        16,
+        2,
+        16,
+        10,
+      ),
+      child:
+          AppCard(
+        child:
+            Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.lightGreenBg,
-                    shape: BoxShape.circle,
+                  width:
+                      40,
+                  height:
+                      40,
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        AppColors.lightGreenBg,
+                    shape:
+                        BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child:
+                      const Icon(
                     Icons.gps_fixed,
-                    color: AppColors.primaryGreen,
+                    color:
+                        AppColors.primaryGreen,
                   ),
                 ),
 
-                const SizedBox(width: 10),
+                const SizedBox(
+                  width:
+                      10,
+                ),
 
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child:
+                      Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
                     children: [
                       const Text(
                         'Current Location',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style:
+                            TextStyle(
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
                       ),
 
-                      const SizedBox(height: 2),
+                      const SizedBox(
+                        height:
+                            2,
+                      ),
 
                       Text(
                         _locationStatus,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textGrey,
+                        style:
+                            const TextStyle(
+                          fontSize:
+                              11,
+                          color:
+                              AppColors.textGrey,
                         ),
                       ),
                     ],
@@ -855,51 +1930,63 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
                 if (_precisePermission)
                   const Icon(
                     Icons.check_circle,
-                    color: AppColors.primaryGreen,
-                    size: 20,
+                    color:
+                        AppColors.primaryGreen,
+                    size:
+                        20,
                   ),
               ],
             ),
 
-            const SizedBox(height: 10),
+            const SizedBox(
+              height:
+                  10,
+            ),
 
             Text(
               _bestPosition == null
                   ? 'Waiting for GPS...'
                   : '${_bestPosition!.latitude.toStringAsFixed(7)}, '
-                        '${_bestPosition!.longitude.toStringAsFixed(7)}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+                    '${_bestPosition!.longitude.toStringAsFixed(7)}',
+              maxLines:
+                  2,
+              overflow:
+                  TextOverflow.ellipsis,
+              style:
+                  const TextStyle(
+                fontSize:
+                    12,
+                color:
+                    AppColors.textGrey,
+              ),
             ),
 
-            const SizedBox(height: 10),
+            const SizedBox(
+              height:
+                  10,
+            ),
 
             Row(
               children: [
                 Expanded(
-                  child: _miniLocationStat(
+                  child:
+                      _miniLocationStat(
                     Icons.my_location,
                     'Accuracy',
-                    _accuracyMeters == null
+                    _accuracyMeters ==
+                            null
                         ? '--'
                         : '±${_accuracyMeters!.toStringAsFixed(1)} m',
                   ),
                 ),
 
                 Expanded(
-                  child: _miniLocationStat(
-                    Icons.layers_outlined,
-                    'Floor',
-                    _floorText.replaceFirst('Floor: ', ''),
-                  ),
-                ),
-
-                Expanded(
-                  child: _miniLocationStat(
+                  child:
+                      _miniLocationStat(
                     Icons.height,
                     'Elevation',
-                    _altitudeMeters == null
+                    _altitudeMeters ==
+                            null
                         ? '--'
                         : '${_altitudeMeters!.toStringAsFixed(0)} m',
                   ),
@@ -907,28 +1994,52 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
               ],
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(
+              height:
+                  8,
+            ),
 
             Row(
               children: [
                 const Icon(
-                  Icons.meeting_room_outlined,
-                  size: 15,
-                  color: AppColors.textGrey,
+                  Icons.location_on_outlined,
+                  size:
+                      15,
+                  color:
+                      AppColors.textGrey,
                 ),
 
-                const SizedBox(width: 5),
+                const SizedBox(
+                  width:
+                      5,
+                ),
 
                 const Expanded(
-                  child: Text(
-                    'Room-level positioning requires indoor technology.',
-                    style: TextStyle(fontSize: 10, color: AppColors.textGrey),
+                  child:
+                      Text(
+                    'GPS position updates continuously while the screen is active.',
+                    style:
+                        TextStyle(
+                      fontSize:
+                          10,
+                      color:
+                          AppColors.textGrey,
+                    ),
                   ),
                 ),
 
                 TextButton(
-                  onPressed: _showLocationDetails,
-                  child: const Text('Details', style: TextStyle(fontSize: 11)),
+                  onPressed:
+                      _showLocationDetails,
+                  child:
+                      const Text(
+                    'Details',
+                    style:
+                        TextStyle(
+                      fontSize:
+                          11,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -942,29 +2053,55 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   // MINI LOCATION STAT
   // ============================================================
 
-  Widget _miniLocationStat(IconData icon, String label, String value) {
+  Widget _miniLocationStat(
+    IconData icon,
+    String label,
+    String value,
+  ) {
     return Row(
       children: [
-        Icon(icon, size: 15, color: AppColors.primaryGreen),
+        Icon(
+          icon,
+          size:
+              15,
+          color:
+              AppColors.primaryGreen,
+        ),
 
-        const SizedBox(width: 4),
+        const SizedBox(
+          width:
+              4,
+        ),
 
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child:
+              Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
             children: [
               Text(
                 label,
-                style: const TextStyle(fontSize: 9, color: AppColors.textGrey),
+                style:
+                    const TextStyle(
+                  fontSize:
+                      9,
+                  color:
+                      AppColors.textGrey,
+                ),
               ),
 
               Text(
                 value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
+                maxLines:
+                    1,
+                overflow:
+                    TextOverflow.ellipsis,
+                style:
+                    const TextStyle(
+                  fontSize:
+                      10,
+                  fontWeight:
+                      FontWeight.bold,
                 ),
               ),
             ],
@@ -979,16 +2116,27 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   // ============================================================
 
   Widget _buildMap() {
-    const LatLng defaultLocation = LatLng(19.0760, 72.8777);
+    const LatLng defaultLocation =
+        LatLng(
+      19.0760,
+      72.8777,
+    );
 
     return FlutterMap(
-      mapController: _mapController,
+      mapController:
+          _mapController,
 
-      options: MapOptions(
-        initialCenter: _userLocation ?? defaultLocation,
-        initialZoom: 17.0,
-        minZoom: 5.0,
-        maxZoom: 20.0,
+      options:
+          MapOptions(
+        initialCenter:
+            _userLocation ??
+                defaultLocation,
+        initialZoom:
+            17.0,
+        minZoom:
+            5.0,
+        maxZoom:
+            20.0,
       ),
 
       children: [
@@ -997,52 +2145,105 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
         // ======================================================
 
         TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.trekcure.app',
+          urlTemplate:
+              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName:
+              'com.trekcure.app',
         ),
 
         // ======================================================
         // CROWD HEATMAP
         // ======================================================
+
         if (_crowdPoints.isNotEmpty)
           HeatMapLayer(
-            heatMapDataSource: InMemoryHeatMapDataSource(data: _crowdPoints),
-            heatMapOptions: HeatMapOptions(
-              radius: 35,
-              blurFactor: 0.8,
-              minOpacity: 0.25,
+            heatMapDataSource:
+                InMemoryHeatMapDataSource(
+              data:
+                  _crowdPoints,
+            ),
+            heatMapOptions:
+                HeatMapOptions(
+              radius:
+                  35,
+              blurFactor:
+                  0.8,
+              minOpacity:
+                  0.25,
               gradient: {
-                0.0: Colors.green,
-                0.35: Colors.yellow,
-                0.60: Colors.orange,
-                1.0: Colors.red,
+                0.0:
+                    Colors.green,
+                0.35:
+                    Colors.yellow,
+                0.60:
+                    Colors.orange,
+                1.0:
+                    Colors.red,
               },
             ),
           ),
 
         // ======================================================
-        // REAL USER LOCATION MARKER
+        // ROUTE
         // ======================================================
+
+        if (_routePoints.length >= 2)
+          PolylineLayer(
+            polylines: [
+              Polyline(
+                points:
+                    _routePoints,
+                strokeWidth:
+                    5,
+                color:
+                    AppColors.primaryGreen,
+              ),
+            ],
+          ),
+
+        // ======================================================
+        // CURRENT USER LOCATION
+        // ======================================================
+
         if (_userLocation != null)
           MarkerLayer(
             markers: [
               Marker(
-                point: _userLocation!,
-                width: 70,
-                height: 70,
-                child: Stack(
-                  alignment: Alignment.center,
+                point:
+                    _userLocation!,
+                width:
+                    70,
+                height:
+                    70,
+                child:
+                    Stack(
+                  alignment:
+                      Alignment.center,
                   children: [
                     Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.18),
-                        shape: BoxShape.circle,
+                      width:
+                          50,
+                      height:
+                          50,
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            Colors.blue.withValues(
+                          alpha:
+                              0.18,
+                        ),
+                        shape:
+                            BoxShape.circle,
                       ),
                     ),
 
-                    const Icon(Icons.location_on, color: Colors.blue, size: 38),
+                    const Icon(
+                      Icons.location_on,
+                      color:
+                          Colors.blue,
+                      size:
+                          38,
+                    ),
                   ],
                 ),
               ),
@@ -1050,42 +2251,149 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
           ),
 
         // ======================================================
-        // LOADING
+        // DESTINATION MARKER
         // ======================================================
-        if (_isLoading) const Center(child: CircularProgressIndicator()),
+
+        if (_destination != null)
+          MarkerLayer(
+            markers: [
+              Marker(
+                point:
+                    _destination!,
+                width:
+                    60,
+                height:
+                    60,
+                child:
+                    const Icon(
+                  Icons.location_pin,
+                  color:
+                      Colors.red,
+                  size:
+                      45,
+                ),
+              ),
+            ],
+          ),
+
+        // ======================================================
+        // ROUTE LOADING
+        // ======================================================
+
+        if (_isLoadingRoute)
+          const Center(
+            child:
+                Card(
+              child:
+                  Padding(
+                padding:
+                    EdgeInsets.all(
+                  16,
+                ),
+                child:
+                    Column(
+                  mainAxisSize:
+                      MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(
+                      height:
+                          10,
+                    ),
+                    Text(
+                      'Finding route...',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+        // ======================================================
+        // LOCATION LOADING
+        // ======================================================
+
+        if (_isLoading)
+          const Center(
+            child:
+                CircularProgressIndicator(),
+          ),
 
         // ======================================================
         // ERROR
         // ======================================================
+
         if (_locationError)
           Center(
-            child: Container(
-              margin: const EdgeInsets.all(30),
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(blurRadius: 10, color: Colors.black26),
+            child:
+                Container(
+              margin:
+                  const EdgeInsets.all(
+                30,
+              ),
+              padding:
+                  const EdgeInsets.all(
+                20,
+              ),
+              decoration:
+                  BoxDecoration(
+                color:
+                    Colors.white,
+                borderRadius:
+                    BorderRadius.circular(
+                  16,
+                ),
+                boxShadow:
+                    const [
+                  BoxShadow(
+                    blurRadius:
+                        10,
+                    color:
+                        Colors.black26,
+                  ),
                 ],
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              child:
+                  Column(
+                mainAxisSize:
+                    MainAxisSize.min,
                 children: [
-                  const Icon(Icons.location_off, size: 40, color: Colors.red),
+                  const Icon(
+                    Icons.location_off,
+                    size:
+                        40,
+                    color:
+                        Colors.red,
+                  ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(
+                    height:
+                        10,
+                  ),
 
                   const Text(
                     'Location unavailable',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    style:
+                        TextStyle(
+                      fontWeight:
+                          FontWeight.bold,
+                      fontSize:
+                          16,
+                    ),
                   ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(
+                    height:
+                        10,
+                  ),
 
                   ElevatedButton(
-                    onPressed: _getLocation,
-                    child: const Text('Try Again'),
+                    onPressed:
+                        _getLocation,
+                    child:
+                        const Text(
+                      'Try Again',
+                    ),
                   ),
                 ],
               ),
@@ -1101,39 +2409,83 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
   Widget _buildLegend() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal:
+            16,
+        vertical:
+            8,
+      ),
+      child:
+          Row(
+        mainAxisAlignment:
+            MainAxisAlignment.center,
         children: [
-          _buildLegendItem(Colors.green, 'Low'),
+          _buildLegendItem(
+            Colors.green,
+            'Low',
+          ),
 
-          const SizedBox(width: 22),
+          const SizedBox(
+            width:
+                22,
+          ),
 
-          _buildLegendItem(Colors.orange, 'Moderate'),
+          _buildLegendItem(
+            Colors.orange,
+            'Moderate',
+          ),
 
-          const SizedBox(width: 22),
+          const SizedBox(
+            width:
+                22,
+          ),
 
-          _buildLegendItem(Colors.red, 'High'),
+          _buildLegendItem(
+            Colors.red,
+            'High',
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildLegendItem(Color color, String label) {
+  Widget _buildLegendItem(
+    Color color,
+    String label,
+  ) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize:
+          MainAxisSize.min,
       children: [
         Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          width:
+              12,
+          height:
+              12,
+          decoration:
+              BoxDecoration(
+            color:
+                color,
+            shape:
+                BoxShape.circle,
+          ),
         ),
 
-        const SizedBox(width: 6),
+        const SizedBox(
+          width:
+              6,
+        ),
 
         Text(
           label,
-          style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+          style:
+              const TextStyle(
+            fontSize:
+                12,
+            color:
+                AppColors.textGrey,
+          ),
         ),
       ],
     );
@@ -1145,31 +2497,59 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
   Widget _buildCrowdCard() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      child: AppCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      padding:
+          const EdgeInsets.fromLTRB(
+        16,
+        8,
+        16,
+        16,
+      ),
+      child:
+          AppCard(
+        child:
+            Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             const Text(
               'Crowd Overview',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              style:
+                  TextStyle(
+                fontSize:
+                    16,
+                fontWeight:
+                    FontWeight.bold,
+              ),
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(
+              height:
+                  8,
+            ),
 
             Text(
               _userLocation == null
                   ? 'Getting your current location...'
                   : 'Crowd density around your current location.',
-              style: const TextStyle(color: AppColors.textGrey, fontSize: 13),
+              style:
+                  const TextStyle(
+                color:
+                    AppColors.textGrey,
+                fontSize:
+                    13,
+              ),
             ),
 
-            const SizedBox(height: 14),
+            const SizedBox(
+              height:
+                  14,
+            ),
 
             Row(
               children: [
                 Expanded(
-                  child: _buildCrowdInfo(
+                  child:
+                      _buildCrowdInfo(
                     Icons.groups,
                     _crowdLevel,
                     'Current Crowd',
@@ -1177,10 +2557,18 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
                   ),
                 ),
 
-                Container(width: 1, height: 45, color: Colors.grey),
+                Container(
+                  width:
+                      1,
+                  height:
+                      45,
+                  color:
+                      Colors.grey,
+                ),
 
                 Expanded(
-                  child: _buildCrowdInfo(
+                  child:
+                      _buildCrowdInfo(
                     Icons.percent,
                     '$_density%',
                     'Density',
@@ -1207,25 +2595,48 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
   ) {
     return Column(
       children: [
-        Icon(icon, color: color, size: 23),
+        Icon(
+          icon,
+          color:
+              color,
+          size:
+              23,
+        ),
 
-        const SizedBox(height: 5),
+        const SizedBox(
+          height:
+              5,
+        ),
 
         Text(
           value,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: color,
-            fontSize: 14,
+          style:
+              TextStyle(
+            fontWeight:
+                FontWeight.bold,
+            color:
+                color,
+            fontSize:
+                14,
           ),
         ),
 
-        const SizedBox(height: 2),
+        const SizedBox(
+          height:
+              2,
+        ),
 
         Text(
           label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 10, color: AppColors.textGrey),
+          textAlign:
+              TextAlign.center,
+          style:
+              const TextStyle(
+            fontSize:
+                10,
+            color:
+                AppColors.textGrey,
+          ),
         ),
       ],
     );
@@ -1246,4 +2657,20 @@ class _MapCrowdScreenState extends State<MapCrowdScreen> {
 
     return Colors.red;
   }
+}
+
+// ==================================================================
+// SEARCH PLACE MODEL
+// ==================================================================
+
+class _SearchPlace {
+  final String name;
+  final double latitude;
+  final double longitude;
+
+  const _SearchPlace({
+    required this.name,
+    required this.latitude,
+    required this.longitude,
+  });
 }
