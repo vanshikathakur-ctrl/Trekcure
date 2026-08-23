@@ -47,8 +47,7 @@ class _SosEmergencyScreenState
   // ============================================================
 
   Future<void> _loadEmergencyContacts() async {
-    final user =
-        _supabase.auth.currentUser;
+    final user = _supabase.auth.currentUser;
 
     if (user == null) {
       if (!mounted) return;
@@ -62,20 +61,6 @@ class _SosEmergencyScreenState
     }
 
     try {
-      /*
-       * Expected table:
-       *
-       * emergency_contacts
-       *
-       * Each saved emergency contact should have one row
-       * associated with the logged-in user.
-       *
-       * user_id = auth.users.id
-       *
-       * We only need the id column here because the SOS screen
-       * only needs the number of contacts.
-       */
-
       final List<dynamic> contacts =
           await _supabase
               .from('emergency_contacts')
@@ -108,7 +93,7 @@ class _SosEmergencyScreenState
   }
 
   // ============================================================
-  // OPEN MANAGE CONTACTS
+  // MANAGE EMERGENCY CONTACTS
   // ============================================================
 
   Future<void> _manageEmergencyContacts() async {
@@ -120,7 +105,6 @@ class _SosEmergencyScreenState
       ),
     );
 
-    // Reload immediately after the user adds/removes contacts.
     await _loadEmergencyContacts();
   }
 
@@ -145,6 +129,159 @@ class _SosEmergencyScreenState
   }
 
   // ============================================================
+  // SHOW SOS INFORMATION
+  // ============================================================
+
+  void _showSosInfo() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(
+                Icons.info_outline,
+                color: AppColors.primaryGreen,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'How SOS Emergency Works',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                _infoStep(
+                  icon: Icons.touch_app_outlined,
+                  title: '1. Press and hold SOS',
+                  text:
+                      'Press and hold the red SOS button for 3 seconds to prevent accidental activation.',
+                ),
+                const SizedBox(height: 14),
+                _infoStep(
+                  icon: Icons.warning_amber_rounded,
+                  title: '2. Emergency alert is created',
+                  text:
+                      'After the 3-second hold, TrekCure creates an emergency SOS alert for your account.',
+                ),
+                const SizedBox(height: 14),
+                _infoStep(
+                  icon: Icons.people_outline,
+                  title: '3. Emergency contacts are notified',
+                  text:
+                      _emergencyContactCount == 0
+                          ? 'No emergency contacts are currently saved. Add contacts using Manage.'
+                          : '$_emergencyContactCount emergency contact${_emergencyContactCount == 1 ? '' : 's'} will be notified.',
+                ),
+                const SizedBox(height: 14),
+                _infoStep(
+                  icon: Icons.notifications_active_outlined,
+                  title: '4. Online emergency notification',
+                  text:
+                      'When you are online, TrekCure sends the SOS notification through the configured notification service.',
+                ),
+                const SizedBox(height: 14),
+                _infoStep(
+                  icon: Icons.wifi_off_outlined,
+                  title: '5. Offline SOS',
+                  text:
+                      'When normal internet connectivity is unavailable, use Offline SOS to access the offline emergency flow.',
+                ),
+                const SizedBox(height: 14),
+                _infoStep(
+                  icon: Icons.location_on_outlined,
+                  title: '6. Location',
+                  text:
+                      'The SOS alert includes the location currently configured by the app for the emergency record.',
+                ),
+                const SizedBox(height: 14),
+                _infoStep(
+                  icon: Icons.cancel_outlined,
+                  title: 'Important',
+                  text:
+                      'Do not press the SOS button unless you need emergency assistance. Use Manage to keep your emergency contacts up to date.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Got it'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // INFO STEP
+  // ============================================================
+
+  Widget _infoStep({
+    required IconData icon,
+    required String title,
+    required String text,
+  }) {
+    return Row(
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: AppColors.lightGreenBg,
+            borderRadius:
+                BorderRadius.circular(10),
+          ),
+          child: Icon(
+            icon,
+            size: 20,
+            color: AppColors.primaryGreen,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                text,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textGrey,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
   // HOLD TO TRIGGER SOS
   // ============================================================
 
@@ -160,9 +297,7 @@ class _SosEmergencyScreenState
     });
 
     _holdTimer = Timer.periodic(
-      const Duration(
-        milliseconds: 100,
-      ),
+      const Duration(milliseconds: 100),
       (timer) {
         if (!mounted) {
           timer.cancel();
@@ -261,15 +396,12 @@ class _SosEmergencyScreenState
               .from('sos_alerts')
               .insert({
         'user_id': user.id,
-
-        // Current prototype location.
-        // Replace with live GPS coordinates when your
-        // location service is connected to SOS.
         'location':
             'POINT(72.8777 19.0760)',
-
         'status': 'active',
-      }).select().single();
+      })
+              .select()
+              .single();
 
       debugPrint(
         'SOS RESPONSE: $response',
@@ -333,9 +465,8 @@ class _SosEmergencyScreenState
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         SnackBar(
           content: Text(
             'Failed to activate SOS: $e',
@@ -377,24 +508,15 @@ class _SosEmergencyScreenState
             size: 16,
             color: AppColors.textGrey,
           ),
-
-          const SizedBox(
-            height: 4,
-          ),
-
+          const SizedBox(height: 4),
           Text(
             label,
             style: const TextStyle(
               fontSize: 10,
-              color:
-                  AppColors.textGrey,
+              color: AppColors.textGrey,
             ),
           ),
-
-          const SizedBox(
-            height: 2,
-          ),
-
+          const SizedBox(height: 2),
           Text(
             value,
             style: TextStyle(
@@ -492,7 +614,6 @@ class _SosEmergencyScreenState
             child:
                 _contactAvatar(i),
           ),
-
         if (_emergencyContactCount > 5)
           Padding(
             padding:
@@ -555,16 +676,21 @@ class _SosEmergencyScreenState
                 16,
           ),
         ),
-        actions:
-            const [
+        actions: [
           Padding(
             padding:
-                EdgeInsets.only(
+                const EdgeInsets.only(
               right: 16,
             ),
-            child:
-                Icon(
-              Icons.info_outline,
+            child: IconButton(
+              onPressed:
+                  _showSosInfo,
+              tooltip:
+                  'How SOS works',
+              icon:
+                  const Icon(
+                Icons.info_outline,
+              ),
             ),
           ),
         ],
@@ -573,9 +699,7 @@ class _SosEmergencyScreenState
       body:
           SingleChildScrollView(
         padding:
-            const EdgeInsets.all(
-          24,
-        ),
+            const EdgeInsets.all(24),
         child:
             Column(
           children: [
@@ -592,23 +716,18 @@ class _SosEmergencyScreenState
                   (_) => _startHold(),
               onLongPressEnd:
                   (_) => _cancelHold(),
-
               child:
                   SizedBox(
-                width:
-                    180,
-                height:
-                    180,
+                width: 180,
+                height: 180,
                 child:
                     Stack(
                   alignment:
                       Alignment.center,
                   children: [
                     SizedBox(
-                      width:
-                          180,
-                      height:
-                          180,
+                      width: 180,
+                      height: 180,
                       child:
                           CircularProgressIndicator(
                         value:
@@ -621,12 +740,9 @@ class _SosEmergencyScreenState
                             AppColors.dangerRed,
                       ),
                     ),
-
                     Container(
-                      width:
-                          140,
-                      height:
-                          140,
+                      width: 140,
+                      height: 140,
                       decoration:
                           const BoxDecoration(
                         color:
@@ -639,16 +755,13 @@ class _SosEmergencyScreenState
                       child:
                           _isSendingSos
                               ? const SizedBox(
-                                  width:
-                                      30,
-                                  height:
-                                      30,
+                                  width: 30,
+                                  height: 30,
                                   child:
                                       CircularProgressIndicator(
                                     color:
                                         Colors.white,
-                                    strokeWidth:
-                                        3,
+                                    strokeWidth: 3,
                                   ),
                                 )
                               : const Text(
@@ -703,11 +816,9 @@ class _SosEmergencyScreenState
                     AppColors.primaryGreen,
                   ),
                 ),
-
                 const SizedBox(
                   width: 10,
                 ),
-
                 Expanded(
                   child:
                       _statusChip(
@@ -717,11 +828,9 @@ class _SosEmergencyScreenState
                     AppColors.primaryGreen,
                   ),
                 ),
-
                 const SizedBox(
                   width: 10,
                 ),
-
                 Expanded(
                   child:
                       _statusChip(
@@ -747,8 +856,7 @@ class _SosEmergencyScreenState
                   double.infinity,
               child:
                   OutlinedButton.icon(
-                onPressed:
-                    () {
+                onPressed: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -794,7 +902,6 @@ class _SosEmergencyScreenState
                               FontWeight.bold,
                         ),
                       ),
-
                       TextButton(
                         onPressed:
                             _manageEmergencyContacts,
@@ -815,8 +922,7 @@ class _SosEmergencyScreenState
                     _contactMessage,
                     style:
                         const TextStyle(
-                      fontSize:
-                          12,
+                      fontSize: 12,
                       color:
                           AppColors.textGrey,
                     ),
