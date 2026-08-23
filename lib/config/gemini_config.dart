@@ -1,4 +1,8 @@
 class GeminiConfig {
-  static const String apiKey =
-      'AQ.Ab8RN6ITuSfMUF67eRu4o27jVj6xTJxSztwvGbJgJpUU-AbXQw';
+  GeminiConfig._();
+
+  static const String apiKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: '',
+  );
 }

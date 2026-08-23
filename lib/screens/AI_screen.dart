@@ -417,51 +417,77 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
   String _friendlyError(Object error) {
     final String message = error.toString();
 
-    if (message.contains('API key is not configured')) {
+    debugPrint('================================');
+    debugPrint('TREKCURE AI ERROR');
+    debugPrint(message);
+    debugPrint('================================');
+
+    if (message.contains('API key is EMPTY')) {
       return '''
-Gemini is not configured yet.
+Gemini API key is not configured.
 
-Run the application with:
+Run the app using:
 
-flutter run --dart-define=GEMINI_API_KEY=YOUR_GEMINI_API_KEY
-
-Do not put your Gemini API key directly inside the Dart source code.
+flutter run --dart-define=GEMINI_API_KEY=YOUR_KEY
 ''';
     }
 
-    if (message.contains('403')) {
+    if (message.contains('400')) {
       return '''
 Gemini rejected the request.
 
-Please check:
-• Your Gemini API key
-• Gemini API access
-• API restrictions
-• Whether the selected model is available for your key
+$message
+''';
+    }
+
+    if (message.contains('401') || message.contains('403')) {
+      return '''
+Gemini API key or permissions are incorrect.
+
+$message
+''';
+    }
+
+    if (message.contains('404')) {
+      return '''
+The Gemini model was not found.
+
+$message
 ''';
     }
 
     if (message.contains('429')) {
       return '''
-The Gemini free-tier request limit has been reached.
+Gemini rate limit reached.
 
-Please wait and try again later.
+$message
 ''';
     }
 
-    if (message.contains('SocketException') ||
-        message.contains('TimeoutException')) {
+    if (message.contains('SocketException')) {
       return '''
-I could not connect to Gemini.
+Could not connect to Gemini.
 
-Please check your internet connection and try again.
+Check your internet connection.
+
+$message
+''';
+    }
+
+    if (message.contains('TimeoutException')) {
+      return '''
+Gemini request timed out.
+
+Please try again.
+
+$message
 ''';
     }
 
     return '''
-I couldn't process that request right now.
+TrekCure AI error:
 
-Please try again in a moment.
+$message
 ''';
   }
 

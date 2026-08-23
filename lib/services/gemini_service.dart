@@ -25,8 +25,19 @@ class GeminiService {
   // ============================================================
 
   bool get isConfigured {
-    return _apiKey.trim().isNotEmpty &&
-        _apiKey != 'PASTE_YOUR_GEMINI_API_KEY_HERE';
+    return _apiKey.trim().isNotEmpty;
+  }
+
+  // ============================================================
+  // DEBUG INFORMATION
+  // ============================================================
+
+  String get keyStatus {
+    if (_apiKey.trim().isEmpty) {
+      return 'Gemini API key is EMPTY';
+    }
+
+    return 'Gemini API key loaded successfully';
   }
 
   // ============================================================
@@ -38,6 +49,7 @@ You are TrekCure AI, an intelligent tourist safety assistant
 inside the TrekCure application.
 
 Your job is to help tourists understand their current:
+
 - Weather
 - Temperature
 - Humidity
@@ -48,7 +60,8 @@ Your job is to help tourists understand their current:
 - Trekking conditions
 - Travel conditions
 
-You can also answer general questions related to:
+You can also answer questions about:
+
 - Tourism
 - Trekking
 - Travel safety
@@ -61,17 +74,16 @@ You can also answer general questions related to:
 IMPORTANT RULES:
 
 1. Always use the current TrekCure data supplied in the request
-   when answering questions about the user's current conditions.
+   when answering questions about current conditions.
 
 2. Never invent weather, crowd, location, temperature, humidity,
    wind or safety information.
 
 3. If information is unavailable, clearly say that it is unavailable.
 
-4. If the conditions indicate danger, prioritize the user's safety.
+4. If conditions indicate danger, prioritize the user's safety.
 
-5. If trekking is unsafe, clearly recommend avoiding or postponing
-   the activity.
+5. If trekking is unsafe, recommend avoiding or postponing the activity.
 
 6. Give practical and easy-to-understand recommendations.
 
@@ -79,7 +91,7 @@ IMPORTANT RULES:
    meteorologist or government authority.
 
 8. For emergencies, tell the user to use the TrekCure SOS feature
-   and contact their saved emergency contacts or appropriate local
+   and contact saved emergency contacts or appropriate local
    emergency services.
 
 9. Crowd information may be estimated by the TrekCure prototype.
@@ -89,19 +101,20 @@ IMPORTANT RULES:
 
 11. Keep answers suitable for a mobile application.
 
-12. Use bullet points when they make the answer easier to understand.
+12. Use bullet points when useful.
 
 13. When asked "Is it safe?", provide:
-   - Safety assessment
-   - Main risks
-   - Recommended action
-   - Precautions
+
+- Safety assessment
+- Main risks
+- Recommended action
+- Precautions
 
 14. When asked to analyse current conditions, consider all available
-   weather and crowd information together.
+weather and crowd information together.
 
 15. Never pretend to have access to information that was not supplied
-   by TrekCure.
+by TrekCure.
 ''';
 
   // ============================================================
@@ -118,17 +131,21 @@ IMPORTANT RULES:
     // ----------------------------------------------------------
 
     if (!isConfigured) {
-      throw Exception('Gemini API key is not configured.');
+      throw Exception(
+        'Gemini API key is EMPTY.\n\n'
+        'Run Flutter using:\n'
+        'flutter run --dart-define=GEMINI_API_KEY=YOUR_KEY',
+      );
     }
 
     // ----------------------------------------------------------
-    // API URL
+    // URL
     // ----------------------------------------------------------
 
     final Uri uri = Uri.parse('$_baseUrl/$_model:generateContent?key=$_apiKey');
 
     // ----------------------------------------------------------
-    // BUILD TREKCURE CONTEXT
+    // CONTEXT
     // ----------------------------------------------------------
 
     final String contextText = _buildContext(context);
@@ -141,7 +158,6 @@ IMPORTANT RULES:
 
     for (final Map<String, String> message in conversation) {
       final String role = message['role'] ?? 'user';
-
       final String text = message['text'] ?? '';
 
       if (text.trim().isEmpty) {
@@ -157,7 +173,7 @@ IMPORTANT RULES:
     }
 
     // ----------------------------------------------------------
-    // CURRENT USER QUESTION
+    // CURRENT QUESTION
     // ----------------------------------------------------------
 
     contents.add({
@@ -198,7 +214,19 @@ information whenever relevant.
 
     try {
       // --------------------------------------------------------
-      // SEND REQUEST
+      // DEBUG
+      // --------------------------------------------------------
+
+      print('==============================================');
+      print('TREKCURE GEMINI REQUEST');
+      print('==============================================');
+      print('Model: $_model');
+      print('API key loaded: ${_apiKey.isNotEmpty}');
+      print('Question: $question');
+      print('==============================================');
+
+      // --------------------------------------------------------
+      // HTTP REQUEST
       // --------------------------------------------------------
 
       final http.Response response = await http
@@ -210,6 +238,16 @@ information whenever relevant.
           .timeout(const Duration(seconds: 30));
 
       // --------------------------------------------------------
+      // DEBUG RESPONSE
+      // --------------------------------------------------------
+
+      print('==============================================');
+      print('GEMINI RESPONSE');
+      print('Status: ${response.statusCode}');
+      print('Body: ${response.body}');
+      print('==============================================');
+
+      // --------------------------------------------------------
       // SUCCESS
       // --------------------------------------------------------
 
@@ -217,7 +255,7 @@ information whenever relevant.
         final dynamic decoded = jsonDecode(response.body);
 
         if (decoded is! Map<String, dynamic>) {
-          throw Exception('Invalid response from Gemini.');
+          throw Exception('Gemini returned an invalid response.');
         }
 
         final String text = _extractText(decoded);
@@ -234,18 +272,15 @@ information whenever relevant.
       // --------------------------------------------------------
 
       throw Exception(_getApiError(response.statusCode, response.body));
+    } on Exception {
+      rethrow;
     } catch (e) {
-      // Don't hide our own useful error messages.
-      if (e is Exception) {
-        rethrow;
-      }
-
-      throw Exception('Unable to connect to Gemini.');
+      throw Exception('Gemini connection error: $e');
     }
   }
 
   // ============================================================
-  // EXTRACT RESPONSE TEXT
+  // EXTRACT TEXT
   // ============================================================
 
   String _extractText(Map<String, dynamic> data) {
@@ -285,7 +320,7 @@ information whenever relevant.
   }
 
   // ============================================================
-  // API ERROR HANDLING
+  // API ERROR
   // ============================================================
 
   String _getApiError(int statusCode, String responseBody) {
@@ -297,40 +332,50 @@ information whenever relevant.
       if (decoded is Map<String, dynamic>) {
         final dynamic error = decoded['error'];
 
-        if (error is Map && error['message'] != null) {
-          apiMessage = error['message'].toString();
+        if (error is Map) {
+          final dynamic message = error['message'];
+
+          if (message != null) {
+            apiMessage = message.toString();
+          }
         }
       }
     } catch (_) {
-      // Keep default message.
+      apiMessage = responseBody;
     }
 
     switch (statusCode) {
       case 400:
-        return 'Invalid Gemini request: $apiMessage';
+        return 'Gemini 400 Bad Request:\n$apiMessage';
 
       case 401:
+        return 'Gemini 401 Unauthorized:\n$apiMessage';
+
       case 403:
-        return 'Gemini API key is invalid or does not have permission.';
+        return 'Gemini 403 Permission Denied:\n$apiMessage';
 
       case 404:
-        return 'Gemini model was not found. Please check the selected model.';
+        return 'Gemini 404 Model Not Found:\n$apiMessage';
 
       case 429:
-        return 'Gemini request limit has been reached. Please try again later.';
+        return 'Gemini 429 Rate Limit:\n$apiMessage';
 
       case 500:
+        return 'Gemini 500 Server Error:\n$apiMessage';
+
       case 502:
+        return 'Gemini 502 Bad Gateway:\n$apiMessage';
+
       case 503:
-        return 'Gemini is temporarily unavailable. Please try again later.';
+        return 'Gemini 503 Service Unavailable:\n$apiMessage';
 
       default:
-        return '$apiMessage (HTTP $statusCode)';
+        return 'Gemini HTTP $statusCode:\n$apiMessage';
     }
   }
 
   // ============================================================
-  // BUILD TREKCURE CONTEXT
+  // BUILD CONTEXT
   // ============================================================
 
   String _buildContext(Map<String, dynamic> context) {
@@ -376,15 +421,14 @@ Crowd level: $crowdLevel
 Crowd density: $crowdDensity %
 Estimated people: $estimatedPeople
 
-NOTE:
-The crowd information may be estimated by the current
-TrekCure prototype and should not be treated as an
-official crowd measurement.
+IMPORTANT:
+The crowd information may be estimated by the TrekCure
+prototype and should not be treated as an official measurement.
 ''';
   }
 
   // ============================================================
-  // SAFE VALUE CONVERSION
+  // SAFE VALUE
   // ============================================================
 
   String _value(dynamic value, String fallback) {
