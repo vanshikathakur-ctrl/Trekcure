@@ -16,7 +16,7 @@ class MeshService {
 
   final MeshNetwork _mesh = MeshNetwork(
     config: const MeshConfig(
-      serviceName: 'trekcure-mesh',
+      serviceName: 'tc-mesh',
       strategy: TransportStrategy.lowPower,
       enableLogging: true,
     ),
@@ -167,13 +167,17 @@ class MeshService {
       }
 
       // Create identity.
-      _userId ??= _createDeviceId();
+     // Create a very short BLE identity.
+_userId ??= _createDeviceId();
 
-      final suffix =
-          _userId!.substring(_userId!.length - 4);
+final suffix = _userId!.substring(
+  _userId!.length - 4,
+);
 
-      _userName ??= 'TrekCure-$suffix';
+// Keep the advertised name extremely short.
+_userName ??= 'T$suffix';
 
+_userName ??= 'TC$suffix';
       debugPrint('==============================');
       debugPrint('LOCAL MESH IDENTITY');
       debugPrint('User ID: $_userId');
