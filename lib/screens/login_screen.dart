@@ -596,105 +596,127 @@ class _ForgotPasswordScreenState
   bool _loading = false;
 
   Future<void> _sendResetEmail() async {
-    final String email =
-        _emailController.text.trim();
+  final String email =
+      _emailController.text.trim();
 
-    if (email.isEmpty) {
-      _message(
-        'Please enter your email address.',
-      );
-      return;
-    }
+  if (email.isEmpty) {
+    _message(
+      'Please enter your email address.',
+    );
+    return;
+  }
 
-    if (!email.contains('@')) {
-      _message(
-        'Please enter a valid email address.',
-      );
-      return;
-    }
+  if (!email.contains('@')) {
+    _message(
+      'Please enter a valid email address.',
+    );
+    return;
+  }
 
-    setState(() {
-      _loading = true;
-    });
+  setState(() {
+    _loading = true;
+  });
 
-    try {
-      await Supabase.instance.client.auth
-          .resetPasswordForEmail(
-        email,
-        redirectTo:
-            _passwordResetRedirect,
-      );
+  try {
+    // ==========================================================
+    // PASSWORD RESET DEBUG
+    // ==========================================================
 
-      if (!mounted) return;
+    debugPrint('========================================');
+    debugPrint('TREKCURE PASSWORD RESET');
+    debugPrint('Email: $email');
+    debugPrint(
+      'Redirect: $_passwordResetRedirect',
+    );
+    debugPrint('Sending request to Supabase...');
 
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder:
-            (dialogContext) {
-          return AlertDialog(
-            title: const Row(
-              children: [
-                Icon(
-                  Icons
-                      .mark_email_read_outlined,
-                  color:
-                      AppColors.primaryGreen,
-                ),
-                SizedBox(
-                  width: 10,
-                ),
-                Expanded(
-                  child: Text(
-                    'Reset link sent',
-                  ),
-                ),
-              ],
-            ),
-            content: Text(
-              'A password reset link has been sent to:\n\n$email\n\nOpen your email and tap the reset link.',
-            ),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(
-                    dialogContext,
-                  );
-                },
-                child: const Text(
-                  'OK',
+    await Supabase.instance.client.auth
+        .resetPasswordForEmail(
+      email,
+      redirectTo:
+          _passwordResetRedirect,
+    );
+
+    debugPrint(
+      'SUPABASE PASSWORD RESET REQUEST COMPLETED',
+    );
+    debugPrint('========================================');
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(
+                Icons.mark_email_read_outlined,
+                color:
+                    AppColors.primaryGreen,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Reset link requested',
                 ),
               ),
             ],
-          );
-        },
-      );
+          ),
+          content: Text(
+            'Supabase accepted the password reset request for:\n\n$email\n\nPlease check your inbox, spam, junk, and promotions folders.',
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                );
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      Navigator.pop(context);
-    } on AuthException catch (e) {
-      if (!mounted) return;
+    Navigator.pop(context);
+  } on AuthException catch (e) {
+    debugPrint('========================================');
+    debugPrint('SUPABASE PASSWORD RESET ERROR');
+    debugPrint('Message: ${e.message}');
+    debugPrint(
+      'Status code: ${e.statusCode}',
+    );
+    debugPrint('========================================');
 
-      _message(e.message);
-    } catch (e) {
-      debugPrint(
-        'PASSWORD RESET ERROR: $e',
-      );
+    if (!mounted) return;
 
-      if (!mounted) return;
+    _message(
+      'Supabase error: ${e.message}',
+    );
+  } catch (e) {
+    debugPrint('========================================');
+    debugPrint('PASSWORD RESET ERROR');
+    debugPrint('$e');
+    debugPrint('========================================');
 
-      _message(
-        'Could not send the password reset email. Please try again.',
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
+    if (!mounted) return;
+
+    _message(
+      'Could not send the password reset email. Please try again.',
+    );
+  } finally {
+    if (mounted) {
+      setState(() {
+        _loading = false;
+      });
     }
   }
+}
 
   void _message(
     String message,

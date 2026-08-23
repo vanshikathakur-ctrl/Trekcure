@@ -1,23 +1,61 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- ============================================================
+         LOCATION
+         ============================================================ -->
 
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <uses-permission
+        android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- ============================================================
+         NOTIFICATIONS
+         ============================================================ -->
+
+    <uses-permission
+        android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <uses-permission
+        android:name="android.permission.VIBRATE" />
+
+    <!-- ============================================================
+         BLUETOOTH
+         ============================================================ -->
+
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN" />
+
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADVERTISE" />
+
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- ============================================================
+         WIFI AWARE
+         ============================================================ -->
+
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES" />
 
     <uses-feature
         android:name="android.hardware.wifi.aware"
         android:required="false" />
 
+    <!-- ============================================================
+         APPLICATION
+         ============================================================ -->
+
     <application
         android:label="trekcure"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <!-- ========================================================
+             MAIN ACTIVITY
+             ======================================================== -->
 
         <activity
             android:name=".MainActivity"
@@ -29,46 +67,77 @@
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
 
-            <!-- Flutter normal theme -->
+            <!-- ====================================================
+                 FLUTTER NORMAL THEME
+                 ==================================================== -->
+
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
 
-            <!-- APP LAUNCHER -->
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
+            <!-- ====================================================
+                 APP LAUNCHER
+                 ==================================================== -->
 
-                <category android:name="android.intent.category.LAUNCHER"/>
+            <intent-filter>
+
+                <action
+                    android:name="android.intent.action.MAIN" />
+
+                <category
+                    android:name="android.intent.category.LAUNCHER" />
+
             </intent-filter>
 
-            <!-- PASSWORD RESET DEEP LINK -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
+            <!-- ====================================================
+                 SUPABASE PASSWORD RESET DEEP LINK
+                 
+                 io.supabase.trekcure://reset-password
+                 ==================================================== -->
 
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
+            <intent-filter>
+
+                <action
+                    android:name="android.intent.action.VIEW" />
+
+                <category
+                    android:name="android.intent.category.DEFAULT" />
+
+                <category
+                    android:name="android.intent.category.BROWSABLE" />
 
                 <data
                     android:scheme="io.supabase.trekcure"
                     android:host="reset-password" />
+
             </intent-filter>
 
         </activity>
 
-        <!-- Required by Flutter -->
+        <!-- ========================================================
+             REQUIRED BY FLUTTER
+             ======================================================== -->
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
 
     </application>
 
-    <!-- Required to query activities that can process text -->
+    <!-- ============================================================
+         TEXT PROCESSING
+         ============================================================ -->
+
     <queries>
 
         <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT"/>
 
-            <data android:mimeType="text/plain"/>
+            <action
+                android:name="android.intent.action.PROCESS_TEXT" />
+
+            <data
+                android:mimeType="text/plain" />
+
         </intent>
 
     </queries>

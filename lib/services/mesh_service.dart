@@ -124,7 +124,7 @@ class MeshService {
         onDisconnected: _onDisconnected,
         serviceId: 'com.trekcure.offline_sos',
       );
-
+      _isRunning = true;
       await Nearby().startDiscovery(
         _userName!,
         _strategy,
@@ -142,7 +142,7 @@ class MeshService {
         serviceId: 'com.trekcure.offline_sos',
       );
 
-      _isRunning = true;
+    
 
       _updateNodeCount();
 

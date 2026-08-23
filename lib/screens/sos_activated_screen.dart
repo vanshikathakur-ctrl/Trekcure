@@ -12,20 +12,49 @@ class SosActivatedScreen extends StatefulWidget {
   });
 
   @override
-  State<SosActivatedScreen> createState() => _SosActivatedScreenState();
+  State<SosActivatedScreen> createState() =>
+      _SosActivatedScreenState();
 }
 
 class _SosActivatedScreenState extends State<SosActivatedScreen> {
   bool _isCancelling = false;
 
+  bool get _isOfflineSos {
+    return widget.sosId == null ||
+        widget.sosId == 'offline-demo';
+  }
+
   Future<void> _cancelSos() async {
-    // If this is an offline/demo SOS, there is no database record to cancel.
-    if (widget.sosId == null) {
-      if (mounted) {
-        Navigator.pop(context);
-      }
+    // ============================================================
+    // OFFLINE SOS
+    // ============================================================
+    //
+    // Offline SOS does not have a Supabase database record.
+    // Therefore, it must NOT try to update sos_alerts.
+    //
+    if (_isOfflineSos) {
+      debugPrint('');
+      debugPrint('================================');
+      debugPrint('OFFLINE SOS CANCELLED LOCALLY');
+      debugPrint('SOS ID: ${widget.sosId}');
+      debugPrint('================================');
+      debugPrint('');
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Offline SOS cancelled'),
+        ),
+      );
+
+      Navigator.pop(context);
       return;
     }
+
+    // ============================================================
+    // ONLINE SOS
+    // ============================================================
 
     setState(() {
       _isCancelling = true;
@@ -49,11 +78,15 @@ class _SosActivatedScreenState extends State<SosActivatedScreen> {
 
       Navigator.pop(context);
     } catch (e) {
+      debugPrint('Failed to cancel SOS: $e');
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to cancel SOS: $e'),
+          content: Text(
+            'Failed to cancel SOS: $e',
+          ),
           backgroundColor: AppColors.dangerRed,
         ),
       );
@@ -114,8 +147,8 @@ class _SosActivatedScreenState extends State<SosActivatedScreen> {
             const SizedBox(height: 6),
 
             Text(
-              widget.sosId == null
-                  ? 'Your emergency alert has been activated.'
+              _isOfflineSos
+                  ? 'Your emergency alert has been sent to nearby devices.'
                   : 'Your emergency alert\nis being sent...',
               textAlign: TextAlign.center,
               style: const TextStyle(
@@ -127,21 +160,27 @@ class _SosActivatedScreenState extends State<SosActivatedScreen> {
 
             const _StatusRow(
               title: 'Location Shared',
-              subtitle: 'Mumbai location is shared for this prototype',
+              subtitle:
+                  'Mumbai location is shared for this prototype',
             ),
 
             const SizedBox(height: 14),
 
-            const _StatusRow(
-              title: 'Emergency Alert Active',
-              subtitle: 'Your SOS request has been recorded',
+            _StatusRow(
+              title: _isOfflineSos
+                  ? 'Offline Alert Active'
+                  : 'Emergency Alert Active',
+              subtitle: _isOfflineSos
+                  ? 'Your SOS has been broadcast to nearby devices'
+                  : 'Your SOS request has been recorded',
             ),
 
             const SizedBox(height: 14),
 
             const _StatusRow(
               title: 'Help is on the way',
-              subtitle: 'Stay calm and wait for assistance.',
+              subtitle:
+                  'Stay calm and wait for assistance.',
             ),
 
             const Spacer(),
@@ -149,21 +188,25 @@ class _SosActivatedScreenState extends State<SosActivatedScreen> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: _isCancelling ? null : _cancelSos,
+                onPressed:
+                    _isCancelling ? null : _cancelSos,
                 style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
+                  minimumSize:
+                      const Size.fromHeight(52),
                   side: const BorderSide(
                     color: AppColors.dangerRed,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius:
+                        BorderRadius.circular(12),
                   ),
                 ),
                 child: _isCancelling
                     ? const SizedBox(
                         width: 22,
                         height: 22,
-                        child: CircularProgressIndicator(
+                        child:
+                            CircularProgressIndicator(
                           strokeWidth: 2,
                         ),
                       )
@@ -194,7 +237,8 @@ class _StatusRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
       children: [
         const Icon(
           Icons.check_circle,
@@ -204,7 +248,8 @@ class _StatusRow extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
             children: [
               Text(
                 title,
