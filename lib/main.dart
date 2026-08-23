@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:app_links/app_links.dart';
 
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
@@ -23,6 +22,8 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  debugPrint('FIREBASE INITIALIZED');
+
   // ============================================================
   // SUPABASE
   // ============================================================
@@ -41,39 +42,103 @@ Future<void> main() async {
 
   await NotificationService.instance.initialize();
 
+  debugPrint('NOTIFICATIONS INITIALIZED');
+
   // ============================================================
   // START MESH NETWORK
   // ============================================================
 
   try {
     await MeshService.instance.start();
+
+    debugPrint('MESH NETWORK STARTED');
   } catch (e) {
-    debugPrint('MESH AUTO START ERROR: $e');
+    debugPrint(
+      'MESH AUTO START ERROR: $e',
+    );
   }
 
   // ============================================================
-  // OFFLINE SOS
+  // OFFLINE SOS + SOS CANCELLATION NOTIFICATIONS
   // ============================================================
 
   MeshService.instance.sosStream.listen(
     (sos) async {
-      final String senderName =
-          sos['senderName']?.toString() ??
-              'Nearby TrekCure user';
+      try {
+        final String type =
+            sos['type']?.toString().toLowerCase() ?? 'sos';
 
-      final String payload =
-          sos['payload']?.toString() ??
-              'Emergency SOS received from a nearby device.';
+        final String senderName =
+            sos['senderName']?.toString() ??
+                'Nearby TrekCure user';
 
-      debugPrint('================================');
-      debugPrint('OFFLINE SOS NOTIFICATION TRIGGERED');
-      debugPrint('From: $senderName');
-      debugPrint('Payload: $payload');
-      debugPrint('================================');
+        final String sosId =
+            sos['sosId']?.toString() ?? '';
 
-      await NotificationService.instance.showNotification(
-        title: '🚨 EMERGENCY SOS',
-        body: '$senderName needs help nearby!',
+        final String location =
+            sos['location']?.toString() ??
+                'Location unavailable';
+
+        final String payload =
+            sos['payload']?.toString() ?? '';
+
+        // Same notification ID is used for SOS and cancellation.
+        final int notificationId =
+            sosId.isNotEmpty
+                ? sosId.hashCode.abs()
+                : senderName.hashCode.abs();
+
+        debugPrint('================================');
+        debugPrint('OFFLINE SOS EVENT RECEIVED');
+        debugPrint('Type: $type');
+        debugPrint('SOS ID: $sosId');
+        debugPrint('From: $senderName');
+        debugPrint('Location: $location');
+        debugPrint('Payload: $payload');
+        debugPrint('================================');
+
+        // ========================================================
+        // SOS CANCELLED
+        // ========================================================
+
+        if (type == 'cancelled') {
+          await NotificationService.instance.showNotification(
+            id: notificationId,
+            title: '✅ SOS CANCELLED',
+            body:
+                '$senderName has cancelled the SOS.',
+          );
+
+          debugPrint(
+            'SOS CANCELLATION NOTIFICATION SHOWN',
+          );
+
+          return;
+        }
+
+        // ========================================================
+        // NORMAL SOS
+        // ========================================================
+
+        await NotificationService.instance.showNotification(
+          id: notificationId,
+          title: '🚨 EMERGENCY SOS',
+          body:
+              '$senderName needs help nearby!',
+        );
+
+        debugPrint(
+          'SOS EMERGENCY NOTIFICATION SHOWN',
+        );
+      } catch (e) {
+        debugPrint(
+          'SOS NOTIFICATION ERROR: $e',
+        );
+      }
+    },
+    onError: (error) {
+      debugPrint(
+        'SOS STREAM ERROR: $error',
       );
     },
   );
@@ -82,7 +147,9 @@ Future<void> main() async {
   // START APP
   // ============================================================
 
-  runApp(const TrekCureApp());
+  runApp(
+    const TrekCureApp(),
+  );
 }
 
 // ==================================================================
@@ -90,7 +157,9 @@ Future<void> main() async {
 // ==================================================================
 
 class TrekCureApp extends StatefulWidget {
-  const TrekCureApp({super.key});
+  const TrekCureApp({
+    super.key,
+  });
 
   @override
   State<TrekCureApp> createState() =>
@@ -99,13 +168,13 @@ class TrekCureApp extends StatefulWidget {
 
 class _TrekCureAppState
     extends State<TrekCureApp> {
+
   // ============================================================
-  // DEEP LINK SERVICE
+  // SUPABASE AUTH LISTENER
   // ============================================================
 
-  final AppLinks _appLinks = AppLinks();
-
-  StreamSubscription<Uri>? _deepLinkSubscription;
+  StreamSubscription<AuthState>?
+      _authSubscription;
 
   // ============================================================
   // RESET SCREEN PROTECTION
@@ -122,175 +191,86 @@ class _TrekCureAppState
     super.initState();
 
     _listenForAuthChanges();
-
-    _initializeDeepLinks();
   }
 
   // ============================================================
-  // SUPABASE AUTH LISTENER
+  // SUPABASE AUTH STATE LISTENER
   // ============================================================
 
   void _listenForAuthChanges() {
-    debugPrint('STARTING SUPABASE AUTH LISTENER');
+    debugPrint(
+      '================================',
+    );
 
-    Supabase
-        .instance
-        .client
-        .auth
-        .onAuthStateChange
-        .listen(
+    debugPrint(
+      'STARTING SUPABASE AUTH LISTENER',
+    );
+
+    debugPrint(
+      '================================',
+    );
+
+    _authSubscription =
+        Supabase
+            .instance
+            .client
+            .auth
+            .onAuthStateChange
+            .listen(
       (AuthState state) {
-        debugPrint('================================');
+        debugPrint(
+          '================================',
+        );
+
         debugPrint(
           'SUPABASE AUTH EVENT: ${state.event}',
         );
+
         debugPrint(
           'SESSION EXISTS: ${state.session != null}',
         );
-        debugPrint('================================');
 
-        // --------------------------------------------------------
+        if (state.session != null) {
+          debugPrint(
+            'USER ID: ${state.session!.user.id}',
+          );
+        }
+
+        debugPrint(
+          '================================',
+        );
+
+        // ========================================================
         // PASSWORD RECOVERY
-        // --------------------------------------------------------
+        // ========================================================
 
         if (state.event ==
             AuthChangeEvent.passwordRecovery) {
           debugPrint(
+            '================================',
+          );
+
+          debugPrint(
             'PASSWORD RECOVERY EVENT RECEIVED',
+          );
+
+          debugPrint(
+            'OPENING RESET PASSWORD SCREEN',
+          );
+
+          debugPrint(
+            '================================',
           );
 
           _openResetPassword();
         }
       },
-      onError: (error) {
-        debugPrint(
-          'AUTH LISTENER ERROR: $error',
-        );
-      },
-    );
-  }
-
-  // ============================================================
-  // INITIALIZE DEEP LINKS
-  // ============================================================
-
-  Future<void> _initializeDeepLinks() async {
-    debugPrint('================================');
-    debugPrint('TREKCURE DEEP LINK SERVICE STARTED');
-    debugPrint('================================');
-
-    // ----------------------------------------------------------
-    // APP ALREADY OPEN / BACKGROUND
-    // ----------------------------------------------------------
-
-    _deepLinkSubscription =
-        _appLinks.uriLinkStream.listen(
-      (Uri uri) {
-        debugPrint('================================');
-        debugPrint('INCOMING DEEP LINK');
-        debugPrint('URI: $uri');
-        debugPrint('SCHEME: ${uri.scheme}');
-        debugPrint('HOST: ${uri.host}');
-        debugPrint('PATH: ${uri.path}');
-        debugPrint('QUERY: ${uri.query}');
-        debugPrint('FRAGMENT: ${uri.fragment}');
-        debugPrint('================================');
-
-        _handleDeepLink(uri);
-      },
       onError: (Object error) {
         debugPrint(
-          'DEEP LINK STREAM ERROR: $error',
+          'SUPABASE AUTH LISTENER ERROR: $error',
         );
       },
     );
-
-    // ----------------------------------------------------------
-    // APP WAS CLOSED
-    // ----------------------------------------------------------
-
-    try {
-      final Uri? initialUri =
-          await _appLinks.getInitialLink();
-
-      if (initialUri != null) {
-        debugPrint('================================');
-        debugPrint('INITIAL DEEP LINK RECEIVED');
-        debugPrint('URI: $initialUri');
-        debugPrint('SCHEME: ${initialUri.scheme}');
-        debugPrint('HOST: ${initialUri.host}');
-        debugPrint('PATH: ${initialUri.path}');
-        debugPrint('QUERY: ${initialUri.query}');
-        debugPrint(
-          'FRAGMENT: ${initialUri.fragment}',
-        );
-        debugPrint('================================');
-
-        _handleDeepLink(initialUri);
-      } else {
-        debugPrint(
-          'NO INITIAL DEEP LINK',
-        );
-      }
-    } catch (e) {
-      debugPrint(
-        'INITIAL DEEP LINK ERROR: $e',
-      );
-    }
-  }
-
-  // ============================================================
-  // HANDLE DEEP LINK
-  // ============================================================
-
-  void _handleDeepLink(Uri uri) {
-    debugPrint('========================================');
-    debugPrint('TREKCURE DEEP LINK RECEIVED');
-    debugPrint('URI: $uri');
-    debugPrint('SCHEME: ${uri.scheme}');
-    debugPrint('HOST: ${uri.host}');
-    debugPrint('PATH: ${uri.path}');
-    debugPrint('QUERY: ${uri.query}');
-    debugPrint('FRAGMENT: ${uri.fragment}');
-    debugPrint('========================================');
-
-    // ----------------------------------------------------------
-    // CHECK SCHEME
-    // ----------------------------------------------------------
-
-    if (uri.scheme != 'io.supabase.trekcure') {
-      debugPrint(
-        'DEEP LINK IGNORED: WRONG SCHEME',
-      );
-      return;
-    }
-
-    // ----------------------------------------------------------
-    // CHECK HOST
-    // ----------------------------------------------------------
-
-    if (uri.host != 'reset-password') {
-      debugPrint(
-        'DEEP LINK IGNORED: WRONG HOST',
-      );
-      return;
-    }
-
-    debugPrint(
-      'RESET PASSWORD DEEP LINK CONFIRMED',
-    );
-
-    // ----------------------------------------------------------
-    // IMPORTANT
-    //
-    // Supabase should process the recovery session and emit
-    // AuthChangeEvent.passwordRecovery.
-    //
-    // The auth listener above will open ResetPasswordScreen.
-    // We also open it here as a fallback for the deep-link case.
-    // ----------------------------------------------------------
-
-    _openResetPassword();
   }
 
   // ============================================================
@@ -298,30 +278,52 @@ class _TrekCureAppState
   // ============================================================
 
   void _openResetPassword() {
+    // ----------------------------------------------------------
+    // PREVENT DUPLICATE RESET SCREENS
+    // ----------------------------------------------------------
+
     if (_openingResetScreen) {
       debugPrint(
-        'RESET SCREEN ALREADY OPENING',
+        'RESET PASSWORD SCREEN ALREADY OPEN',
       );
+
+      return;
+    }
+
+    if (!mounted) {
+      debugPrint(
+        'RESET PASSWORD SCREEN CANNOT OPEN: APP NOT MOUNTED',
+      );
+
       return;
     }
 
     _openingResetScreen = true;
 
     debugPrint(
-      'OPENING RESET PASSWORD SCREEN',
+      'PREPARING RESET PASSWORD SCREEN',
     );
+
+    // ----------------------------------------------------------
+    // WAIT UNTIL FLUTTER FRAME IS READY
+    // ----------------------------------------------------------
 
     WidgetsBinding.instance.addPostFrameCallback(
       (_) {
         if (!mounted) {
           _openingResetScreen = false;
+
           return;
         }
+
+        debugPrint(
+          'NAVIGATING TO RESET PASSWORD SCREEN',
+        );
 
         Navigator.of(context)
             .push(
           MaterialPageRoute(
-            builder: (_) =>
+            builder: (context) =>
                 const ResetPasswordScreen(),
           ),
         )
@@ -344,7 +346,7 @@ class _TrekCureAppState
 
   @override
   void dispose() {
-    _deepLinkSubscription?.cancel();
+    _authSubscription?.cancel();
 
     super.dispose();
   }
@@ -354,11 +356,16 @@ class _TrekCureAppState
   // ============================================================
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return MaterialApp(
       title: 'TrekCure',
+
       debugShowCheckedModeBanner: false,
+
       theme: AppTheme.theme,
+
       home: const SplashScreen(),
     );
   }
