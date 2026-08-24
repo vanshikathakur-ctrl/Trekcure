@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/mesh_service.dart';
+import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
 import 'AI_screen.dart';
@@ -83,6 +84,16 @@ class _HomeDashboardScreenState
       _sosSubscription;
 
   // ============================================================
+  // ACTIVE SOS DIALOG STATE
+  // ============================================================
+
+  bool _isSosDialogOpen = false;
+
+  String? _activeSosId;
+
+  BuildContext? _sosDialogContext;
+
+  // ============================================================
   // INIT
   // ============================================================
 
@@ -154,25 +165,83 @@ class _HomeDashboardScreenState
       (sosData) {
         if (!mounted) return;
 
+        final type =
+            sosData['type']?.toString() ?? 'SOS';
+
+        final sosId =
+            sosData['sosId']?.toString();
+
         final senderName =
             sosData['senderName']?.toString() ??
-                'Unknown device';
-
-        final payload =
-            sosData['payload']?.toString() ??
-                'SOS';
+                'Unknown TrekCure User';
 
         debugPrint('');
         debugPrint('==============================');
-        debugPrint('DASHBOARD RECEIVED MESH SOS');
+        debugPrint('DASHBOARD MESH EVENT');
+        debugPrint('Type: $type');
+        debugPrint('SOS ID: $sosId');
         debugPrint('From: $senderName');
-        debugPrint('Payload: $payload');
         debugPrint('==============================');
         debugPrint('');
 
-        _showIncomingSosDialog(
-          senderName: senderName,
-          payload: payload,
+        // ======================================================
+        // SOS CANCELLATION RECEIVED
+        // ======================================================
+
+        if (type == 'SOS_CANCELLED') {
+          if (sosId == null || sosId.isEmpty) {
+            debugPrint(
+              'INVALID SOS CANCELLATION: '
+              'MISSING SOS ID',
+            );
+
+            return;
+          }
+
+          // TOP ANDROID NOTIFICATION POPUP
+          NotificationService.instance.showNotification(
+            id: 9002,
+            title: 'SOS CANCELLED',
+            body:
+                '$senderName has cancelled the emergency alert.',
+          );
+
+          _handleIncomingSosCancellation(
+            sosId: sosId,
+            senderName: senderName,
+          );
+
+          return;
+        }
+
+        // ======================================================
+        // NORMAL SOS RECEIVED
+        // ======================================================
+
+        if (type == 'SOS') {
+          final payload =
+              sosData['payload']?.toString() ??
+                  'SOS';
+
+          // TOP ANDROID NOTIFICATION POPUP
+          NotificationService.instance.showNotification(
+            id: 9001,
+            title: 'SOS RECEIVED',
+            body:
+                'Emergency alert received from $senderName.',
+          );
+
+          _showIncomingSosDialog(
+            sosId: sosId,
+            senderName: senderName,
+            payload: payload,
+          );
+
+          return;
+        }
+
+        debugPrint(
+          'UNKNOWN MESH EVENT TYPE: $type',
         );
       },
       onError: (error) {
@@ -184,165 +253,416 @@ class _HomeDashboardScreenState
   }
 
   // ============================================================
+  // HANDLE SOS CANCELLATION
+  // ============================================================
+
+  void _handleIncomingSosCancellation({
+    required String sosId,
+    required String senderName,
+  }) {
+    final bool isMatchingSos =
+        _activeSosId == sosId;
+
+    debugPrint('');
+    debugPrint('==============================');
+    debugPrint('HANDLING SOS CANCELLATION');
+    debugPrint('Cancelled SOS ID: $sosId');
+    debugPrint('Active SOS ID: $_activeSosId');
+    debugPrint('Matching: $isMatchingSos');
+    debugPrint('==============================');
+    debugPrint('');
+
+    if (_isSosDialogOpen &&
+        isMatchingSos &&
+        _sosDialogContext != null) {
+      Navigator.of(
+        _sosDialogContext!,
+        rootNavigator: true,
+      ).pop();
+
+      _isSosDialogOpen = false;
+
+      _activeSosId = null;
+
+      _sosDialogContext = null;
+    }
+
+    _showSosCancelledDialog(
+      senderName: senderName,
+    );
+  }
+
+  // ============================================================
+  // SHOW SOS CANCELLED DIALOG
+  // ============================================================
+
+  void _showSosCancelledDialog({
+    required String senderName,
+  }) {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius:
+                  BorderRadius.circular(20),
+            ),
+            title: const Row(
+              children: [
+                Icon(
+                  Icons.check_circle,
+                  color: AppColors.primaryGreen,
+                  size: 32,
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'SOS CANCELLED',
+                    style: TextStyle(
+                      color:
+                          AppColors.primaryGreen,
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize:
+                  MainAxisSize.min,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'The emergency alert has been cancelled by:',
+                  style: TextStyle(
+                    color:
+                        AppColors.textGrey,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  senderName,
+                  style: const TextStyle(
+                    fontWeight:
+                        FontWeight.bold,
+                    fontSize: 18,
+                    color:
+                        AppColors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.all(14),
+                  decoration:
+                      BoxDecoration(
+                    color: AppColors.primaryGreen
+                        .withValues(
+                      alpha: 0.10,
+                    ),
+                    borderRadius:
+                        BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline,
+                        color:
+                            AppColors.primaryGreen,
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'The emergency situation has been marked as resolved.',
+                          style: TextStyle(
+                            color:
+                                AppColors.textDark,
+                            fontSize: 14,
+                            fontWeight:
+                                FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actionsPadding:
+                const EdgeInsets.fromLTRB(
+              24,
+              0,
+              24,
+              20,
+            ),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style:
+                      ElevatedButton.styleFrom(
+                    backgroundColor:
+                        AppColors.primaryGreen,
+                    foregroundColor:
+                        Colors.white,
+                    minimumSize:
+                        const Size.fromHeight(48),
+                    shape:
+                        RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.of(
+                      dialogContext,
+                    ).pop();
+                  },
+                  child: const Text(
+                    'OKAY',
+                    style: TextStyle(
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ============================================================
   // SHOW INCOMING SOS DIALOG
   // ============================================================
 
- void _showIncomingSosDialog({
-  required String senderName,
-  required String payload,
-}) {
-  if (!mounted) return;
+  void _showIncomingSosDialog({
+    required String? sosId,
+    required String senderName,
+    required String payload,
+  }) {
+    if (!mounted) return;
 
-  String message = 'Emergency SOS received';
-  String location = 'Location unavailable';
+    String message = 'Emergency SOS received';
 
-  final parts = payload.split('|');
+    String location = 'Location unavailable';
 
-  if (parts.isNotEmpty &&
-      parts.first.toUpperCase() == 'SOS') {
-    if (parts.length > 1 &&
-        parts[1].trim().isNotEmpty) {
-      message = parts[1];
+    final parts = payload.split('|');
+
+    if (parts.isNotEmpty &&
+        parts.first.toUpperCase() == 'SOS') {
+      if (parts.length > 2 &&
+          parts[2].trim().isNotEmpty) {
+        message = parts[2];
+      }
+
+      if (parts.length > 6 &&
+          parts[6].trim().isNotEmpty) {
+        location = parts[6];
+      }
     }
 
-    // Payload format:
-    // SOS|message|latitude|longitude|senderName|readableLocation
-    if (parts.length > 5 &&
-        parts[5].trim().isNotEmpty) {
-      location = parts[5];
+    if (_isSosDialogOpen) {
+      debugPrint(
+        'SOS dialog already open. Ignoring duplicate.',
+      );
+
+      return;
     }
+
+    _isSosDialogOpen = true;
+
+    _activeSosId = sosId;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        _sosDialogContext = dialogContext;
+
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius:
+                  BorderRadius.circular(20),
+            ),
+            title: const Row(
+              children: [
+                Icon(
+                  Icons.sos,
+                  color: AppColors.dangerRed,
+                  size: 32,
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'SOS RECEIVED',
+                    style: TextStyle(
+                      color:
+                          AppColors.dangerRed,
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize:
+                  MainAxisSize.min,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Emergency signal received from:',
+                  style: TextStyle(
+                    color:
+                        AppColors.textGrey,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  senderName,
+                  style: const TextStyle(
+                    fontWeight:
+                        FontWeight.bold,
+                    fontSize: 18,
+                    color:
+                        AppColors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color:
+                        AppColors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Location:',
+                  style: TextStyle(
+                    color:
+                        AppColors.textGrey,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  location,
+                  style: const TextStyle(
+                    fontWeight:
+                        FontWeight.w600,
+                    fontSize: 14,
+                    color:
+                        AppColors.textDark,
+                  ),
+                ),
+              ],
+            ),
+            actionsPadding:
+                const EdgeInsets.fromLTRB(
+              24,
+              0,
+              24,
+              20,
+            ),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style:
+                      ElevatedButton.styleFrom(
+                    backgroundColor:
+                        AppColors.dangerRed,
+                    foregroundColor:
+                        Colors.white,
+                    minimumSize:
+                        const Size.fromHeight(48),
+                    shape:
+                        RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: () {
+                    _closeSosDialog(
+                      dialogContext,
+                    );
+                  },
+                  child: const Text(
+                    'ACKNOWLEDGE',
+                    style: TextStyle(
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () {
+                    _closeSosDialog(
+                      dialogContext,
+                    );
+                  },
+                  child: const Text(
+                    'DISMISS',
+                    style: TextStyle(
+                      color:
+                          AppColors.textGrey,
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    ).then((_) {
+      _isSosDialogOpen = false;
+
+      _activeSosId = null;
+
+      _sosDialogContext = null;
+    });
   }
 
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) {
-      return AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: const Row(
-          children: [
-            Icon(
-              Icons.sos,
-              color: AppColors.dangerRed,
-              size: 32,
-            ),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'SOS RECEIVED',
-                style: TextStyle(
-                  color: AppColors.dangerRed,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Emergency signal received from:',
-              style: TextStyle(
-                color: AppColors.textGrey,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              senderName,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: AppColors.textDark,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              message,
-              style: const TextStyle(
-                fontSize: 16,
-                color: AppColors.textDark,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Location:',
-              style: TextStyle(
-                color: AppColors.textGrey,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              location,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-                color: AppColors.textDark,
-              ),
-            ),
-          ],
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(
-          24,
-          0,
-          24,
-          20,
-        ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    AppColors.dangerRed,
-                foregroundColor:
-                    Colors.white,
-                minimumSize:
-                    const Size.fromHeight(48),
-                shape:
-                    RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.circular(10),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text(
-                'ACKNOWLEDGE',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          SizedBox(
-            width: double.infinity,
-            child: TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text(
-                'DISMISS',
-                style: TextStyle(
-                  color: AppColors.textGrey,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    },
-  );
-}
+  // ============================================================
+  // CLOSE SOS DIALOG
+  // ============================================================
+
+  void _closeSosDialog(
+    BuildContext dialogContext,
+  ) {
+    Navigator.of(dialogContext).pop();
+
+    _isSosDialogOpen = false;
+
+    _activeSosId = null;
+
+    _sosDialogContext = null;
+  }
+
   // ============================================================
   // LOAD USER PROFILE
   // ============================================================
@@ -819,9 +1139,7 @@ class _HomeDashboardScreenState
                 ],
               ),
             ),
-
             const SizedBox(width: 14),
-
             Expanded(
               child: Column(
                 crossAxisAlignment:
@@ -839,9 +1157,7 @@ class _HomeDashboardScreenState
                           FontWeight.bold,
                     ),
                   ),
-
                   const SizedBox(height: 2),
-
                   Row(
                     children: [
                       const Icon(
@@ -850,9 +1166,7 @@ class _HomeDashboardScreenState
                         color:
                             AppColors.textGrey,
                       ),
-
                       const SizedBox(width: 3),
-
                       Expanded(
                         child: Text(
                           _userLocationText,
@@ -895,7 +1209,6 @@ class _HomeDashboardScreenState
               );
             },
           ),
-
           IconButton(
             icon: Stack(
               clipBehavior:
@@ -907,7 +1220,6 @@ class _HomeDashboardScreenState
                       AppColors.textDark,
                   size: 28,
                 ),
-
                 if (_unreadNotifications >
                     0)
                   Positioned(
@@ -953,7 +1265,6 @@ class _HomeDashboardScreenState
               }
             },
           ),
-
           const SizedBox(width: 8),
         ],
       ),
@@ -1000,9 +1311,7 @@ class _HomeDashboardScreenState
                           size: 28,
                         ),
                       ),
-
                       const SizedBox(width: 16),
-
                       const Expanded(
                         child: Column(
                           crossAxisAlignment:
@@ -1016,9 +1325,7 @@ class _HomeDashboardScreenState
                                 fontSize: 19,
                               ),
                             ),
-
                             SizedBox(height: 4),
-
                             Text(
                               'Safety Status: Low Risk',
                               maxLines: 1,
@@ -1032,9 +1339,7 @@ class _HomeDashboardScreenState
                                     FontWeight.w500,
                               ),
                             ),
-
                             SizedBox(height: 2),
-
                             Text(
                               'Updated just now',
                               style: TextStyle(
@@ -1079,7 +1384,6 @@ class _HomeDashboardScreenState
                                         AppColors.infoBlue,
                                     size: 30,
                                   ),
-
                                   IconButton(
                                     padding:
                                         EdgeInsets.zero,
@@ -1099,9 +1403,7 @@ class _HomeDashboardScreenState
                                   ),
                                 ],
                               ),
-
                               const SizedBox(height: 10),
-
                               Text(
                                 _weatherLoading
                                     ? '--°C'
@@ -1114,7 +1416,6 @@ class _HomeDashboardScreenState
                                   letterSpacing: -0.5,
                                 ),
                               ),
-
                               Text(
                                 _weatherCondition,
                                 maxLines: 1,
@@ -1129,9 +1430,7 @@ class _HomeDashboardScreenState
                                       FontWeight.w600,
                                 ),
                               ),
-
                               const SizedBox(height: 12),
-
                               Row(
                                 children: [
                                   const Icon(
@@ -1140,9 +1439,7 @@ class _HomeDashboardScreenState
                                     color:
                                         AppColors.infoBlue,
                                   ),
-
                                   const SizedBox(width: 4),
-
                                   Expanded(
                                     child: Text(
                                       _weatherLoading
@@ -1163,9 +1460,7 @@ class _HomeDashboardScreenState
                                   ),
                                 ],
                               ),
-
                               const SizedBox(height: 4),
-
                               Row(
                                 children: [
                                   const Icon(
@@ -1174,9 +1469,7 @@ class _HomeDashboardScreenState
                                     color:
                                         AppColors.textGrey,
                                   ),
-
                                   const SizedBox(width: 4),
-
                                   Expanded(
                                     child: Text(
                                       _weatherLoading
@@ -1227,9 +1520,7 @@ class _HomeDashboardScreenState
                                       FontWeight.w600,
                                 ),
                               ),
-
                               const SizedBox(height: 10),
-
                               Row(
                                 children: [
                                   Icon(
@@ -1237,9 +1528,7 @@ class _HomeDashboardScreenState
                                     color: _crowdColor,
                                     size: 28,
                                   ),
-
                                   const SizedBox(width: 8),
-
                                   Expanded(
                                     child: Text(
                                       _crowdLevel,
@@ -1255,9 +1544,7 @@ class _HomeDashboardScreenState
                                   ),
                                 ],
                               ),
-
                               const SizedBox(height: 6),
-
                               Text(
                                 _isCrowdLoading
                                     ? 'Calculating...'
@@ -1271,9 +1558,7 @@ class _HomeDashboardScreenState
                                       AppColors.textDark,
                                 ),
                               ),
-
                               const SizedBox(height: 14),
-
                               GestureDetector(
                                 onTap: () {
                                   Navigator.push(
@@ -1300,7 +1585,6 @@ class _HomeDashboardScreenState
                                         ),
                                       ),
                                     ),
-
                                     Icon(
                                       Icons.arrow_forward_ios,
                                       size: 13,
@@ -1340,9 +1624,7 @@ class _HomeDashboardScreenState
                             AppColors.dangerRed,
                         size: 28,
                       ),
-
                       const SizedBox(width: 14),
-
                       Expanded(
                         child: Column(
                           crossAxisAlignment:
@@ -1361,16 +1643,13 @@ class _HomeDashboardScreenState
                                     ),
                                   ),
                                 ),
-
                                 Icon(
                                   Icons.chevron_right,
                                   size: 22,
                                 ),
                               ],
                             ),
-
                             const SizedBox(height: 6),
-
                             Text(
                               'High crowd detected near\n$_nearbyAlertLocation. Avoid if possible.',
                               style:
@@ -1383,9 +1662,7 @@ class _HomeDashboardScreenState
                                     FontWeight.w500,
                               ),
                             ),
-
                             const SizedBox(height: 10),
-
                             GestureDetector(
                               onTap: () {
                                 Navigator.push(
@@ -1418,10 +1695,6 @@ class _HomeDashboardScreenState
               ),
 
               const SizedBox(height: 18),
-
-              // ==================================================
-              // OFFLINE MESH STATUS
-              // ==================================================
 
               AppCard(
                 color:
@@ -1457,9 +1730,7 @@ class _HomeDashboardScreenState
                           size: 28,
                         ),
                       ),
-
                       const SizedBox(width: 16),
-
                       Expanded(
                         child: Column(
                           crossAxisAlignment:
@@ -1485,9 +1756,7 @@ class _HomeDashboardScreenState
                                     ),
                                   ),
                                 ),
-
                                 const SizedBox(width: 6),
-
                                 Text(
                                   '● $_nearbyMeshNodes ${_nearbyMeshNodes == 1 ? 'Node' : 'Nodes'}',
                                   style:
@@ -1503,9 +1772,7 @@ class _HomeDashboardScreenState
                                 ),
                               ],
                             ),
-
                             const SizedBox(height: 5),
-
                             Text(
                               !_meshRelayActive
                                   ? 'Offline mesh is currently inactive.'

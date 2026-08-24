@@ -19,10 +19,10 @@ class MeshService {
   final StreamController<int> _nodeCountController =
       StreamController<int>.broadcast();
 
-  Stream<int> get nodeCountStream => _nodeCountController.stream;
-
   final StreamController<Map<String, dynamic>> _sosController =
       StreamController<Map<String, dynamic>>.broadcast();
+
+  Stream<int> get nodeCountStream => _nodeCountController.stream;
 
   Stream<Map<String, dynamic>> get sosStream => _sosController.stream;
 
@@ -30,17 +30,25 @@ class MeshService {
 
   final Set<String> _connectedEndpoints = {};
 
+  final Set<String> _connectingEndpoints = {};
+
   int _nearbyNodeCount = 0;
 
   bool _isRunning = false;
+
   bool _isStarting = false;
 
   String? _userId;
+
   String? _userName;
 
   int get nearbyNodeCount => _nearbyNodeCount;
 
   bool get isRunning => _isRunning;
+
+  // ============================================================
+  // CREATE LOCAL DEVICE ID
+  // ============================================================
 
   String _createDeviceId() {
     final random = Random();
@@ -49,11 +57,23 @@ class MeshService {
   }
 
   // ============================================================
-  // REQUEST MESH PERMISSIONS
+  // CREATE UNIQUE OFFLINE SOS ID
+  // ============================================================
+
+  String _createSosId() {
+    final random = Random();
+
+    return 'offline_'
+        '${DateTime.now().millisecondsSinceEpoch}_'
+        '${1000 + random.nextInt(9000)}';
+  }
+
+  // ============================================================
+  // REQUEST REQUIRED PERMISSIONS
   // ============================================================
 
   Future<bool> _requestMeshPermissions() async {
-    final permissions = [
+    final permissions = <Permission>[
       Permission.bluetoothScan,
       Permission.bluetoothAdvertise,
       Permission.bluetoothConnect,
@@ -75,6 +95,20 @@ class MeshService {
     final location =
         statuses[Permission.location]?.isGranted ?? false;
 
+    final nearbyWifiGranted =
+        statuses[Permission.nearbyWifiDevices]?.isGranted ?? true;
+
+    debugPrint('');
+    debugPrint('==============================');
+    debugPrint('TREKCURE MESH PERMISSIONS');
+    debugPrint('Bluetooth Scan: $bluetoothScan');
+    debugPrint('Bluetooth Advertise: $bluetoothAdvertise');
+    debugPrint('Bluetooth Connect: $bluetoothConnect');
+    debugPrint('Location: $location');
+    debugPrint('Nearby WiFi: $nearbyWifiGranted');
+    debugPrint('==============================');
+    debugPrint('');
+
     return bluetoothScan &&
         bluetoothAdvertise &&
         bluetoothConnect &&
@@ -82,7 +116,7 @@ class MeshService {
   }
 
   // ============================================================
-  // LOAD USER NAME FROM SUPABASE
+  // LOAD USER INFORMATION
   // ============================================================
 
   Future<void> _loadUserName() async {
@@ -116,7 +150,17 @@ class MeshService {
       if (fullName != null && fullName.isNotEmpty) {
         _userName = fullName;
       } else {
-        _userName = 'TrekCure User';
+        final metadataName =
+            user.userMetadata?['full_name']
+                ?.toString()
+                .trim();
+
+        if (metadataName != null &&
+            metadataName.isNotEmpty) {
+          _userName = metadataName;
+        } else {
+          _userName = 'TrekCure User';
+        }
       }
 
       debugPrint(
@@ -147,6 +191,7 @@ class MeshService {
 
       if (!serviceEnabled) {
         debugPrint('LOCATION SERVICE IS DISABLED');
+
         return null;
       }
 
@@ -159,7 +204,8 @@ class MeshService {
       }
 
       if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
+          permission ==
+              LocationPermission.deniedForever) {
         debugPrint(
           'LOCATION PERMISSION NOT GRANTED',
         );
@@ -190,7 +236,7 @@ class MeshService {
   }
 
   // ============================================================
-  // CONVERT COORDINATES TO READABLE LOCATION
+  // REVERSE GEOCODE LOCATION
   // ============================================================
 
   Future<String> _getReadableLocation(
@@ -198,7 +244,8 @@ class MeshService {
     double longitude,
   ) async {
     try {
-      if (latitude == 0.0 && longitude == 0.0) {
+      if (latitude == 0.0 &&
+          longitude == 0.0) {
         return 'Location unavailable';
       }
 
@@ -229,7 +276,8 @@ class MeshService {
               as Map<String, dynamic>;
 
       final address =
-          data['address'] as Map<String, dynamic>?;
+          data['address']
+              as Map<String, dynamic>?;
 
       if (address == null) {
         return 'Location unavailable';
@@ -248,6 +296,9 @@ class MeshService {
               address['town'] ??
               address['county'];
 
+      final state =
+          address['state'];
+
       final country =
           address['country'];
 
@@ -262,9 +313,19 @@ class MeshService {
 
       if (city != null &&
           city.toString().trim().isNotEmpty &&
-          city.toString() != locality?.toString()) {
+          city.toString() !=
+              locality?.toString()) {
         locationParts.add(
           city.toString(),
+        );
+      }
+
+      if (state != null &&
+          state.toString().trim().isNotEmpty &&
+          state.toString() !=
+              city?.toString()) {
+        locationParts.add(
+          state.toString(),
         );
       }
 
@@ -283,7 +344,8 @@ class MeshService {
           locationParts.join(', ');
 
       debugPrint(
-        'READABLE SOS LOCATION: $readableLocation',
+        'READABLE SOS LOCATION: '
+        '$readableLocation',
       );
 
       return readableLocation;
@@ -309,7 +371,12 @@ class MeshService {
     debugPrint('TREKCURE NEARBY STATUS');
     debugPrint('Local device: $_userName');
     debugPrint(
-      'Connected nodes: $_nearbyNodeCount',
+      'Discovered devices: '
+      '${_discoveredEndpoints.length}',
+    );
+    debugPrint(
+      'Connected devices: '
+      '$_nearbyNodeCount',
     );
     debugPrint(
       'Connected IDs: '
@@ -330,7 +397,19 @@ class MeshService {
   // ============================================================
 
   Future<void> start() async {
-    if (_isRunning || _isStarting) {
+    if (_isRunning) {
+      debugPrint(
+        'TREKCURE OFFLINE NETWORK ALREADY RUNNING',
+      );
+
+      return;
+    }
+
+    if (_isStarting) {
+      debugPrint(
+        'TREKCURE OFFLINE NETWORK ALREADY STARTING',
+      );
+
       return;
     }
 
@@ -342,8 +421,8 @@ class MeshService {
 
       if (!permissionsGranted) {
         throw Exception(
-          'Required Nearby Connections permissions '
-          'were not granted',
+          'Bluetooth and location permissions '
+          'are required for Offline SOS.',
         );
       }
 
@@ -352,7 +431,7 @@ class MeshService {
       _userId ??= _createDeviceId();
 
       if (_userName == null ||
-          _userName!.isEmpty) {
+          _userName!.trim().isEmpty) {
         final suffix =
             _userId!.substring(
           _userId!.length - 4,
@@ -360,14 +439,6 @@ class MeshService {
 
         _userName = 'T$suffix';
       }
-
-      debugPrint('');
-      debugPrint('==============================');
-      debugPrint(
-        'STARTING TREKCURE OFFLINE NETWORK',
-      );
-      debugPrint('User: $_userName');
-      debugPrint('==============================');
 
       await Nearby().startAdvertising(
         _userName!,
@@ -382,36 +453,34 @@ class MeshService {
             'com.trekcure.offline_sos',
       );
 
-      _isRunning = true;
-
       await Nearby().startDiscovery(
         _userName!,
         _strategy,
         onEndpointFound:
             _onEndpointFound,
-        onEndpointLost: (endpointId) {
-          if (endpointId != null) {
-            _handleEndpointLost(
-              endpointId,
-            );
-          }
-        },
+        onEndpointLost:
+            _onEndpointLost,
         serviceId:
             'com.trekcure.offline_sos',
       );
 
+      _isRunning = true;
+
       _updateNodeCount();
 
-      debugPrint('');
-      debugPrint('==============================');
       debugPrint(
         'TREKCURE OFFLINE NETWORK STARTED',
       );
-      debugPrint('User: $_userName');
-      debugPrint('==============================');
-      debugPrint('');
     } catch (e) {
       _isRunning = false;
+
+      try {
+        await Nearby().stopAdvertising();
+      } catch (_) {}
+
+      try {
+        await Nearby().stopDiscovery();
+      } catch (_) {}
 
       debugPrint(
         'OFFLINE NETWORK START ERROR: $e',
@@ -432,23 +501,19 @@ class MeshService {
     String endpointName,
     String serviceId,
   ) {
-    debugPrint('');
-    debugPrint('==============================');
-    debugPrint('ENDPOINT FOUND');
-    debugPrint('Endpoint ID: $endpointId');
-    debugPrint(
-      'Endpoint Name: $endpointName',
-    );
-    debugPrint('==============================');
-    debugPrint('');
-
-    if (_discoveredEndpoints
-        .containsKey(endpointId)) {
+    if (endpointId.isEmpty) {
       return;
     }
 
     _discoveredEndpoints[endpointId] =
         endpointName;
+
+    if (_connectedEndpoints.contains(endpointId) ||
+        _connectingEndpoints.contains(endpointId)) {
+      return;
+    }
+
+    _connectingEndpoints.add(endpointId);
 
     Nearby().requestConnection(
       _userName ?? 'TrekCure User',
@@ -462,23 +527,21 @@ class MeshService {
     );
   }
 
-  void _handleEndpointLost(
-    String endpointId,
+  // ============================================================
+  // ENDPOINT LOST
+  // ============================================================
+
+  void _onEndpointLost(
+    String? endpointId,
   ) {
-    debugPrint('');
-    debugPrint('==============================');
-    debugPrint('ENDPOINT LOST');
-    debugPrint('Endpoint ID: $endpointId');
-    debugPrint('==============================');
-    debugPrint('');
+    if (endpointId == null ||
+        endpointId.isEmpty) {
+      return;
+    }
 
-    _discoveredEndpoints.remove(
-      endpointId,
-    );
-
-    _connectedEndpoints.remove(
-      endpointId,
-    );
+    _discoveredEndpoints.remove(endpointId);
+    _connectedEndpoints.remove(endpointId);
+    _connectingEndpoints.remove(endpointId);
 
     _updateNodeCount();
   }
@@ -491,18 +554,10 @@ class MeshService {
     String endpointId,
     ConnectionInfo connectionInfo,
   ) {
-    debugPrint('');
-    debugPrint('==============================');
-    debugPrint('CONNECTION INITIATED');
-    debugPrint('Endpoint ID: $endpointId');
-    debugPrint(
-      'Device: ${connectionInfo.endpointName}',
-    );
-    debugPrint('==============================');
-    debugPrint('');
-
     _discoveredEndpoints[endpointId] =
         connectionInfo.endpointName;
+
+    _connectingEndpoints.add(endpointId);
 
     Nearby().acceptConnection(
       endpointId,
@@ -521,26 +576,16 @@ class MeshService {
     String endpointId,
     Status status,
   ) {
-    debugPrint('');
-    debugPrint('==============================');
-    debugPrint('CONNECTION RESULT');
-    debugPrint('Endpoint ID: $endpointId');
-    debugPrint('Status: $status');
-    debugPrint('==============================');
-    debugPrint('');
+    _connectingEndpoints.remove(endpointId);
 
     if (status == Status.CONNECTED) {
-      _connectedEndpoints.add(
-        endpointId,
-      );
+      _connectedEndpoints.add(endpointId);
 
       debugPrint(
         'DEVICE CONNECTED: $endpointId',
       );
     } else {
-      _connectedEndpoints.remove(
-        endpointId,
-      );
+      _connectedEndpoints.remove(endpointId);
 
       debugPrint(
         'CONNECTION FAILED: $endpointId',
@@ -550,16 +595,18 @@ class MeshService {
     _updateNodeCount();
   }
 
+  // ============================================================
+  // DEVICE DISCONNECTED
+  // ============================================================
+
   void _onDisconnected(
     String endpointId,
   ) {
-    _connectedEndpoints.remove(
-      endpointId,
-    );
+    _connectedEndpoints.remove(endpointId);
 
-    _discoveredEndpoints.remove(
-      endpointId,
-    );
+    _connectingEndpoints.remove(endpointId);
+
+    _discoveredEndpoints.remove(endpointId);
 
     debugPrint(
       'DEVICE DISCONNECTED: $endpointId',
@@ -569,7 +616,15 @@ class MeshService {
   }
 
   // ============================================================
-  // RECEIVE SOS
+  // RECEIVE PAYLOAD
+  //
+  // SOS FORMAT:
+  //
+  // SOS|sosId|message|latitude|longitude|senderName|location
+  //
+  // CANCELLATION FORMAT:
+  //
+  // SOS_CANCELLED|sosId|senderName
   // ============================================================
 
   void _onPayloadReceived(
@@ -586,22 +641,13 @@ class MeshService {
       return;
     }
 
-    final message =
-        utf8.decode(bytes);
+    String message;
 
-    debugPrint('');
-    debugPrint('==============================');
-    debugPrint('OFFLINE MESSAGE RECEIVED');
-    debugPrint('Endpoint ID: $endpointId');
-    debugPrint('Payload: $message');
-    debugPrint('==============================');
-    debugPrint('');
-
-    if (!message
-        .toUpperCase()
-        .startsWith('SOS|')) {
+    try {
+      message = utf8.decode(bytes);
+    } catch (e) {
       debugPrint(
-        'Non-SOS message ignored',
+        'FAILED TO DECODE OFFLINE PAYLOAD: $e',
       );
 
       return;
@@ -610,95 +656,182 @@ class MeshService {
     final parts =
         message.split('|');
 
-    String senderName =
-        'Unknown user';
-
-    if (parts.length >= 5 &&
-        parts[4].trim().isNotEmpty) {
-      senderName = parts[4];
+    if (parts.isEmpty) {
+      return;
     }
 
-    String readableLocation =
-        'Location unavailable';
+    final messageType =
+        parts.first.toUpperCase();
 
-    if (parts.length >= 6 &&
-        parts[5].trim().isNotEmpty) {
-      readableLocation =
-          parts[5];
+    // ============================================================
+    // SOS CANCELLATION RECEIVED
+    // ============================================================
+
+    if (messageType == 'SOS_CANCELLED') {
+      final sosId =
+          parts.length > 1
+              ? parts[1].trim()
+              : '';
+
+      final senderName =
+          parts.length > 2 &&
+                  parts[2].trim().isNotEmpty
+              ? parts[2].trim()
+              : 'Unknown TrekCure User';
+
+      if (sosId.isEmpty) {
+        debugPrint(
+          'INVALID SOS CANCELLATION RECEIVED',
+        );
+
+        return;
+      }
+
+      debugPrint('');
+      debugPrint('==============================');
+      debugPrint('REMOTE SOS CANCELLED');
+      debugPrint('SOS ID: $sosId');
+      debugPrint('From: $senderName');
+      debugPrint('==============================');
+      debugPrint('');
+
+      if (!_sosController.isClosed) {
+        _sosController.add({
+          'type': 'SOS_CANCELLED',
+          'sosId': sosId,
+          'senderName': senderName,
+          'payload': message,
+          'endpointId': endpointId,
+          'receivedAt':
+              DateTime.now()
+                  .toIso8601String(),
+        });
+      }
+
+      return;
     }
+
+    // ============================================================
+    // NORMAL SOS RECEIVED
+    // ============================================================
+
+    if (messageType != 'SOS') {
+      debugPrint(
+        'NON-SOS MESSAGE IGNORED',
+      );
+
+      return;
+    }
+
+    if (parts.length < 2 ||
+        parts[1].trim().isEmpty) {
+      debugPrint(
+        'INVALID SOS RECEIVED: MISSING SOS ID',
+      );
+
+      return;
+    }
+
+    final sosId =
+        parts[1].trim();
+
+    final sosMessage =
+        parts.length > 2 &&
+                parts[2].trim().isNotEmpty
+            ? parts[2]
+            : 'Emergency SOS';
+
+    final latitude =
+        parts.length > 3
+            ? parts[3]
+            : 'Unavailable';
+
+    final longitude =
+        parts.length > 4
+            ? parts[4]
+            : 'Unavailable';
+
+    final senderName =
+        parts.length > 5 &&
+                parts[5].trim().isNotEmpty
+            ? parts[5].trim()
+            : 'Unknown TrekCure User';
+
+    final readableLocation =
+        parts.length > 6 &&
+                parts[6].trim().isNotEmpty
+            ? parts[6].trim()
+            : 'Location unavailable';
 
     debugPrint('');
     debugPrint('==============================');
     debugPrint('REMOTE SOS RECEIVED');
+    debugPrint('SOS ID: $sosId');
     debugPrint('From: $senderName');
-    debugPrint(
-      'Location: $readableLocation',
-    );
-    debugPrint('On device: $_userName');
+    debugPrint('Message: $sosMessage');
+    debugPrint('Location: $readableLocation');
     debugPrint('==============================');
     debugPrint('');
 
     if (!_sosController.isClosed) {
       _sosController.add({
+        'type': 'SOS',
+        'sosId': sosId,
         'senderName': senderName,
         'payload': message,
-        'message':
-            parts.length > 1
-                ? parts[1]
-                : '',
-        'latitude':
-            parts.length > 2
-                ? parts[2]
-                : 'Unavailable',
-        'longitude':
-            parts.length > 3
-                ? parts[3]
-                : 'Unavailable',
-        'location':
-            readableLocation,
+        'message': sosMessage,
+        'latitude': latitude,
+        'longitude': longitude,
+        'location': readableLocation,
+        'endpointId': endpointId,
         'receivedAt':
             DateTime.now()
                 .toIso8601String(),
       });
-
-      debugPrint(
-        'SOS FORWARDED TO DASHBOARD',
-      );
     }
   }
+
+  // ============================================================
+  // PAYLOAD TRANSFER STATUS
+  // ============================================================
 
   void _onPayloadTransferUpdate(
     String endpointId,
     PayloadTransferUpdate update,
   ) {
     debugPrint(
-      'Payload update from $endpointId: '
+      'PAYLOAD UPDATE '
+      '[$endpointId]: '
       '${update.status}',
     );
   }
 
   // ============================================================
-  // BROADCAST SOS
+  // BROADCAST OFFLINE SOS
+  //
+  // RETURNS THE UNIQUE SOS ID
   // ============================================================
 
-  Future<void> broadcastSos({
+  Future<String> broadcastSos({
     required String message,
     double? latitude,
     double? longitude,
   }) async {
     if (!_isRunning) {
       throw Exception(
-        'Offline network is not running',
+        'Offline network is not running.',
       );
     }
 
     if (_connectedEndpoints.isEmpty) {
       throw Exception(
-        'No nearby devices are connected yet',
+        'No nearby TrekCure devices are connected yet.',
       );
     }
 
     await _loadUserName();
+
+    final sosId = _createSosId();
 
     Position? position;
 
@@ -720,9 +853,9 @@ class MeshService {
 
     final senderName =
         (_userName == null ||
-                _userName!.isEmpty)
+                _userName!.trim().isEmpty)
             ? 'TrekCure User'
-            : _userName!;
+            : _userName!.trim();
 
     final readableLocation =
         await _getReadableLocation(
@@ -731,7 +864,9 @@ class MeshService {
     );
 
     final payload =
-        'SOS|$message|'
+        'SOS|'
+        '$sosId|'
+        '$message|'
         '$sosLatitude|'
         '$sosLongitude|'
         '$senderName|'
@@ -740,51 +875,147 @@ class MeshService {
     final payloadBytes =
         utf8.encode(payload);
 
-    debugPrint('');
-    debugPrint('==============================');
-    debugPrint('BROADCASTING OFFLINE SOS');
-    debugPrint('From: $senderName');
-    debugPrint(
-      'Location: $readableLocation',
-    );
-    debugPrint(
-      'Coordinates: '
-      '$sosLatitude, $sosLongitude',
-    );
-    debugPrint(
-      'Connected devices: '
-      '${_connectedEndpoints.length}',
-    );
-    debugPrint('Payload: $payload');
-    debugPrint('==============================');
-    debugPrint('');
-
     final endpoints =
         _connectedEndpoints.toList();
 
-    for (final endpointId
-        in endpoints) {
+    int successfulSends = 0;
+
+    for (final endpointId in endpoints) {
       try {
         await Nearby().sendBytesPayload(
           endpointId,
           payloadBytes,
         );
 
+        successfulSends++;
+
         debugPrint(
-          'SOS SENT TO ENDPOINT: '
-          '$endpointId',
+          'SOS SENT TO: $endpointId',
         );
       } catch (e) {
         debugPrint(
-          'FAILED TO SEND TO '
+          'FAILED TO SEND SOS TO '
           '$endpointId: $e',
         );
+
+        _connectedEndpoints.remove(
+          endpointId,
+        );
       }
+    }
+
+    _updateNodeCount();
+
+    if (successfulSends == 0) {
+      throw Exception(
+        'Unable to deliver SOS to any nearby device.',
+      );
     }
 
     debugPrint('');
     debugPrint('==============================');
     debugPrint('SOS BROADCAST COMPLETE');
+    debugPrint('SOS ID: $sosId');
+    debugPrint(
+      'Delivered to: '
+      '$successfulSends device(s)',
+    );
+    debugPrint('==============================');
+    debugPrint('');
+
+    return sosId;
+  }
+
+  // ============================================================
+  // BROADCAST SOS CANCELLATION
+  // ============================================================
+
+  Future<void> broadcastSosCancellation({
+    required String sosId,
+  }) async {
+    if (!_isRunning) {
+      throw Exception(
+        'Offline network is not running.',
+      );
+    }
+
+    if (sosId.trim().isEmpty) {
+      throw Exception(
+        'Invalid SOS ID.',
+      );
+    }
+
+    if (_connectedEndpoints.isEmpty) {
+      throw Exception(
+        'No nearby TrekCure devices are connected.',
+      );
+    }
+
+    await _loadUserName();
+
+    final senderName =
+        (_userName == null ||
+                _userName!.trim().isEmpty)
+            ? 'TrekCure User'
+            : _userName!.trim();
+
+    final payload =
+        'SOS_CANCELLED|'
+        '${sosId.trim()}|'
+        '$senderName';
+
+    final payloadBytes =
+        utf8.encode(payload);
+
+    final endpoints =
+        _connectedEndpoints.toList();
+
+    int successfulSends = 0;
+
+    for (final endpointId in endpoints) {
+      try {
+        await Nearby().sendBytesPayload(
+          endpointId,
+          payloadBytes,
+        );
+
+        successfulSends++;
+
+        debugPrint(
+          'SOS CANCELLATION SENT TO: '
+          '$endpointId',
+        );
+      } catch (e) {
+        debugPrint(
+          'FAILED TO SEND SOS CANCELLATION '
+          'TO $endpointId: $e',
+        );
+
+        _connectedEndpoints.remove(
+          endpointId,
+        );
+      }
+    }
+
+    _updateNodeCount();
+
+    if (successfulSends == 0) {
+      throw Exception(
+        'Unable to deliver SOS cancellation '
+        'to any nearby device.',
+      );
+    }
+
+    debugPrint('');
+    debugPrint('==============================');
+    debugPrint(
+      'SOS CANCELLATION BROADCAST COMPLETE',
+    );
+    debugPrint('SOS ID: $sosId');
+    debugPrint(
+      'Delivered to: '
+      '$successfulSends device(s)',
+    );
     debugPrint('==============================');
     debugPrint('');
   }
@@ -796,42 +1027,59 @@ class MeshService {
   Future<void> stop() async {
     try {
       await Nearby().stopAdvertising();
-
-      await Nearby().stopDiscovery();
-
-      for (final endpointId
-          in _connectedEndpoints.toList()) {
-        try {
-          await Nearby()
-              .disconnectFromEndpoint(
-            endpointId,
-          );
-        } catch (_) {}
-      }
-
-      _discoveredEndpoints.clear();
-
-      _connectedEndpoints.clear();
-
-      _nearbyNodeCount = 0;
-
-      _isRunning = false;
-
-      _isStarting = false;
-
-      if (!_nodeCountController.isClosed) {
-        _nodeCountController.add(0);
-      }
-
-      debugPrint(
-        'TREKCURE OFFLINE NETWORK STOPPED',
-      );
     } catch (e) {
       debugPrint(
-        'OFFLINE NETWORK STOP ERROR: $e',
+        'STOP ADVERTISING ERROR: $e',
       );
     }
+
+    try {
+      await Nearby().stopDiscovery();
+    } catch (e) {
+      debugPrint(
+        'STOP DISCOVERY ERROR: $e',
+      );
+    }
+
+    for (final endpointId
+        in _connectedEndpoints.toList()) {
+      try {
+        await Nearby()
+            .disconnectFromEndpoint(
+          endpointId,
+        );
+      } catch (e) {
+        debugPrint(
+          'DISCONNECT ERROR '
+          '[$endpointId]: $e',
+        );
+      }
+    }
+
+    _discoveredEndpoints.clear();
+
+    _connectedEndpoints.clear();
+
+    _connectingEndpoints.clear();
+
+    _nearbyNodeCount = 0;
+
+    _isRunning = false;
+
+    _isStarting = false;
+
+    if (!_nodeCountController.isClosed) {
+      _nodeCountController.add(0);
+    }
+
+    debugPrint(
+      'TREKCURE OFFLINE NETWORK STOPPED',
+    );
   }
+
+  // ============================================================
+  // DISPOSE
+  // ============================================================
 
   Future<void> dispose() async {
     await stop();
