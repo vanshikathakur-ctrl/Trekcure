@@ -9,6 +9,7 @@ import '../widgets/bottom_nav.dart';
 import 'digital_id_screen.dart';
 import 'emergency_contacts_screen.dart';
 import 'login_screen.dart';
+import 'medical_information_profile_screen.dart';
 import 'verify_digital_id_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -27,11 +28,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   bool _hideEmail = false;
   bool _hidePhone = false;
-
   bool _loading = true;
 
   static const String _hideEmailKey = 'trekcure_hide_email';
-
   static const String _hidePhoneKey = 'trekcure_hide_phone';
 
   @override
@@ -39,10 +38,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _loadProfile();
   }
-
-  // ============================================================
-  // LOAD PROFILE
-  // ============================================================
 
   Future<void> _loadProfile() async {
     final user = _supabase.auth.currentUser;
@@ -70,15 +65,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       setState(() {
         _name = profile?['full_name']?.toString() ?? 'User';
-
         _phone = profile?['phone_number']?.toString() ?? '';
-
         _email = user.email ?? '';
-
         _hideEmail = prefs.getBool(_hideEmailKey) ?? false;
-
         _hidePhone = prefs.getBool(_hidePhoneKey) ?? false;
-
         _loading = false;
       });
     } catch (e) {
@@ -92,10 +82,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // ============================================================
-  // DISPLAY EMAIL
-  // ============================================================
-
   String get _displayEmail {
     if (_hideEmail) {
       return 'Email hidden';
@@ -104,10 +90,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return _email.isEmpty ? 'No email available' : _email;
   }
 
-  // ============================================================
-  // DISPLAY PHONE
-  // ============================================================
-
   String get _displayPhone {
     if (_hidePhone) {
       return 'Phone number hidden';
@@ -115,10 +97,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return _phone.isEmpty ? 'No phone number available' : _phone;
   }
-
-  // ============================================================
-  // PERSONAL INFORMATION
-  // ============================================================
 
   Future<void> _openPersonalInformation() async {
     await Navigator.push(
@@ -129,9 +107,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await _loadProfile();
   }
 
-  // ============================================================
-  // NOTIFICATION SETTINGS
-  // ============================================================
+  Future<void> _openMedicalInformation() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const MedicalInformationProfileScreen(),
+      ),
+    );
+  }
 
   void _openNotificationSettings() {
     Navigator.push(
@@ -139,10 +122,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       MaterialPageRoute(builder: (_) => const NotificationSettingsScreen()),
     );
   }
-
-  // ============================================================
-  // PRIVACY & SECURITY
-  // ============================================================
 
   Future<void> _openPrivacySecurity() async {
     await Navigator.push(
@@ -152,10 +131,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     await _loadProfile();
   }
-
-  // ============================================================
-  // LOGOUT
-  // ============================================================
 
   Future<void> _logout() async {
     try {
@@ -192,7 +167,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
-
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -213,9 +187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   backgroundColor: Colors.white24,
                   child: Icon(Icons.person, color: Colors.white, size: 30),
                 ),
-
                 const SizedBox(width: 14),
-
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,14 +211,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ],
                       ),
-
                       const Text(
                         'Verified Traveler',
                         style: TextStyle(color: Colors.white70, fontSize: 12),
                       ),
-
                       const SizedBox(height: 6),
-
                       Text(
                         _displayEmail,
                         style: const TextStyle(
@@ -254,7 +223,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           fontSize: 12,
                         ),
                       ),
-
                       Text(
                         _displayPhone,
                         style: const TextStyle(
@@ -282,6 +250,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Icons.badge_outlined,
                   'Personal Information',
                   _openPersonalInformation,
+                ),
+
+                // ==================================================
+                // MEDICAL INFORMATION
+                // ==================================================
+                _tile(
+                  Icons.medical_information_outlined,
+                  'Medical Information',
+                  _openMedicalInformation,
+                  subtitle: 'View or update your medical information',
                 ),
 
                 _tile(Icons.contact_phone_outlined, 'Emergency Contacts', () {
@@ -313,19 +291,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ],
             ),
-          ), 
-                _tile(
-  Icons.qr_code_scanner,
-  'Scan Digital ID',
-  () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const VerifyDigitalIdScreen(),
-      ),
-    );
-  },
-),
+          ),
+
+          const SizedBox(height: 10),
+
+          // ======================================================
+          // SCAN DIGITAL ID
+          // ======================================================
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: _tile(Icons.qr_code_scanner, 'Scan Digital ID', () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const VerifyDigitalIdScreen(),
+                ),
+              );
+            }),
+          ),
 
           const SizedBox(height: 10),
 
@@ -345,7 +328,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
-
       bottomNavigationBar: const AppBottomNav(currentIndex: 4),
     );
   }
@@ -354,10 +336,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // TILE
   // ============================================================
 
-  Widget _tile(IconData icon, String title, VoidCallback onTap) {
+  Widget _tile(
+    IconData icon,
+    String title,
+    VoidCallback onTap, {
+    String? subtitle,
+  }) {
     return ListTile(
       leading: Icon(icon, color: AppColors.textDark),
       title: Text(title, style: const TextStyle(fontSize: 14)),
+      subtitle: subtitle == null
+          ? null
+          : Text(
+              subtitle,
+              style: const TextStyle(fontSize: 11, color: AppColors.textGrey),
+            ),
       trailing: const Icon(
         Icons.chevron_right,
         size: 20,
@@ -384,9 +377,7 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   late final TextEditingController _nameController;
-
   late final TextEditingController _emailController;
-
   late final TextEditingController _phoneController;
 
   bool _loading = true;
@@ -397,17 +388,11 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
     super.initState();
 
     _nameController = TextEditingController();
-
     _emailController = TextEditingController();
-
     _phoneController = TextEditingController();
 
     _loadInformation();
   }
-
-  // ============================================================
-  // LOAD INFORMATION
-  // ============================================================
 
   Future<void> _loadInformation() async {
     final user = _supabase.auth.currentUser;
@@ -453,10 +438,6 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
     }
   }
 
-  // ============================================================
-  // SAVE INFORMATION
-  // ============================================================
-
   Future<void> _saveInformation() async {
     final user = _supabase.auth.currentUser;
 
@@ -466,9 +447,7 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
     }
 
     final name = _nameController.text.trim();
-
     final email = _emailController.text.trim();
-
     final phone = _phoneController.text.trim();
 
     if (name.isEmpty) {
@@ -486,18 +465,10 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
     });
 
     try {
-      // ==========================================================
-      // UPDATE PROFILES TABLE
-      // ==========================================================
-
       await _supabase
           .from('profiles')
           .update({'full_name': name, 'phone_number': phone})
           .eq('id', user.id);
-
-      // ==========================================================
-      // UPDATE AUTH EMAIL
-      // ==========================================================
 
       final oldEmail = user.email ?? '';
 
@@ -511,13 +482,11 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
         _saving = false;
       });
 
-      if (email != oldEmail) {
-        _message(
-          'Your information was saved. Check your new email for confirmation.',
-        );
-      } else {
-        _message('Personal information updated successfully.');
-      }
+      _message(
+        email != oldEmail
+            ? 'Information saved. Check your new email for confirmation.'
+            : 'Personal information updated successfully.',
+      );
 
       await Future.delayed(const Duration(milliseconds: 500));
 
@@ -587,7 +556,6 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
-
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -624,32 +592,26 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 24),
-
                 _field(
                   controller: _nameController,
                   label: 'Full Name',
                   icon: Icons.person_outline,
                   keyboardType: TextInputType.name,
                 ),
-
                 _field(
                   controller: _emailController,
                   label: 'Email Address',
                   icon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
                 ),
-
                 _field(
                   controller: _phoneController,
                   label: 'Phone Number',
                   icon: Icons.phone_outlined,
                   keyboardType: TextInputType.phone,
                 ),
-
                 const SizedBox(height: 8),
-
                 SizedBox(
                   width: double.infinity,
                   height: 52,
@@ -670,9 +632,7 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
                           ),
                   ),
                 ),
-
                 const SizedBox(height: 12),
-
                 const Text(
                   'Email changes may require confirmation from the new email address.',
                   textAlign: TextAlign.center,
@@ -710,13 +670,8 @@ class _NotificationSettingsScreenState
   @override
   void initState() {
     super.initState();
-
     _loadSettings();
   }
-
-  // ============================================================
-  // LOAD SETTINGS
-  // ============================================================
 
   Future<void> _loadSettings() async {
     final notifications = await _service.notificationsEnabled();
@@ -734,10 +689,6 @@ class _NotificationSettingsScreenState
       _loading = false;
     });
   }
-
-  // ============================================================
-  // MASTER NOTIFICATION SWITCH
-  // ============================================================
 
   Future<void> _setNotifications(bool value) async {
     await _service.setNotificationsEnabled(value);
@@ -757,10 +708,6 @@ class _NotificationSettingsScreenState
     });
   }
 
-  // ============================================================
-  // SOUND
-  // ============================================================
-
   Future<void> _setSound(bool value) async {
     await _service.setSoundEnabled(value);
 
@@ -771,10 +718,6 @@ class _NotificationSettingsScreenState
     });
   }
 
-  // ============================================================
-  // VIBRATION
-  // ============================================================
-
   Future<void> _setVibration(bool value) async {
     await _service.setVibrationEnabled(value);
 
@@ -784,10 +727,6 @@ class _NotificationSettingsScreenState
       _vibration = value;
     });
   }
-
-  // ============================================================
-  // TEST NOTIFICATION
-  // ============================================================
 
   Future<void> _testNotification() async {
     if (!_notifications) {
@@ -841,16 +780,11 @@ class _NotificationSettingsScreenState
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
-
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // ==================================================
-                // MASTER SWITCH
-                // ==================================================
-
                 AppCard(
                   padding: EdgeInsets.zero,
                   child: SwitchListTile(
@@ -868,12 +802,7 @@ class _NotificationSettingsScreenState
                     activeTrackColor: AppColors.primaryGreen,
                   ),
                 ),
-
                 const SizedBox(height: 14),
-
-                // ==================================================
-                // SOUND + VIBRATION
-                // ==================================================
                 AppCard(
                   padding: EdgeInsets.zero,
                   child: Column(
@@ -885,9 +814,7 @@ class _NotificationSettingsScreenState
                         onChanged: _notifications ? _setSound : null,
                         activeTrackColor: AppColors.primaryGreen,
                       ),
-
                       const Divider(height: 1),
-
                       SwitchListTile(
                         title: const Text('Vibration'),
                         subtitle: const Text('Vibrate for notifications.'),
@@ -898,12 +825,7 @@ class _NotificationSettingsScreenState
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 14),
-
-                // ==================================================
-                // TEST NOTIFICATION
-                // ==================================================
                 AppCard(
                   padding: EdgeInsets.zero,
                   child: ListTile(
@@ -932,9 +854,7 @@ class _NotificationSettingsScreenState
                         : null,
                   ),
                 ),
-
                 const SizedBox(height: 14),
-
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -974,19 +894,13 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
   bool _hideEmail = false;
   bool _hidePhone = false;
   bool _locationSharing = true;
-
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-
     _loadSettings();
   }
-
-  // ============================================================
-  // LOAD SETTINGS
-  // ============================================================
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -1004,10 +918,6 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
     });
   }
 
-  // ============================================================
-  // HIDE EMAIL
-  // ============================================================
-
   Future<void> _setHideEmail(bool value) async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -1021,10 +931,6 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
 
     _message(value ? 'Email is now hidden.' : 'Email is now visible.');
   }
-
-  // ============================================================
-  // HIDE PHONE
-  // ============================================================
 
   Future<void> _setHidePhone(bool value) async {
     final prefs = await SharedPreferences.getInstance();
@@ -1041,10 +947,6 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
       value ? 'Phone number is now hidden.' : 'Phone number is now visible.',
     );
   }
-
-  // ============================================================
-  // LOCATION SHARING
-  // ============================================================
 
   Future<void> _setLocationSharing(bool value) async {
     if (!value) {
@@ -1095,10 +997,6 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
     _message('Location sharing is now on.');
   }
 
-  // ============================================================
-  // CHANGE PASSWORD
-  // ============================================================
-
   void _openChangePassword() {
     Navigator.push(
       context,
@@ -1123,16 +1021,11 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
-
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // ==================================================
-                // HEADER
-                // ==================================================
-
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -1150,9 +1043,7 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
                           size: 32,
                         ),
                       ),
-
                       SizedBox(width: 14),
-
                       Expanded(
                         child: Text(
                           'Protect your TrekCure account and privacy.',
@@ -1166,12 +1057,7 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 18),
-
-                // ==================================================
-                // ACCOUNT SECURITY
-                // ==================================================
                 AppCard(
                   padding: EdgeInsets.zero,
                   child: Column(
@@ -1193,9 +1079,7 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
                           color: AppColors.primaryGreen,
                         ),
                       ),
-
                       const Divider(height: 1),
-
                       ListTile(
                         leading: const Icon(
                           Icons.password_outlined,
@@ -1215,12 +1099,7 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 14),
-
-                // ==================================================
-                // PRIVACY
-                // ==================================================
                 AppCard(
                   padding: EdgeInsets.zero,
                   child: Column(
@@ -1236,9 +1115,7 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
                         onChanged: _setHideEmail,
                         activeTrackColor: AppColors.primaryGreen,
                       ),
-
                       const Divider(height: 1),
-
                       SwitchListTile(
                         title: const Text('Hide Phone Number'),
                         subtitle: Text(
@@ -1250,9 +1127,7 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
                         onChanged: _setHidePhone,
                         activeTrackColor: AppColors.primaryGreen,
                       ),
-
                       const Divider(height: 1),
-
                       SwitchListTile(
                         title: const Text('Location Sharing'),
                         subtitle: Text(
@@ -1267,9 +1142,7 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 14),
-
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -1312,12 +1185,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   bool _hideCurrent = true;
   bool _hideNew = true;
   bool _hideConfirm = true;
-
   bool _saving = false;
-
-  // ============================================================
-  // CHANGE PASSWORD
-  // ============================================================
 
   Future<void> _changePassword() async {
     final user = _supabase.auth.currentUser;
@@ -1370,10 +1238,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     });
 
     try {
-      // ==========================================================
-      // VERIFY CURRENT PASSWORD
-      // ==========================================================
-
       final response = await _supabase.auth.signInWithPassword(
         email: email,
         password: currentPassword,
@@ -1383,18 +1247,12 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         throw const AuthException('Current password is incorrect.');
       }
 
-      // ==========================================================
-      // UPDATE PASSWORD
-      // ==========================================================
-
       await _supabase.auth.updateUser(UserAttributes(password: newPassword));
 
       if (!mounted) return;
 
       _currentPasswordController.clear();
-
       _newPasswordController.clear();
-
       _confirmPasswordController.clear();
 
       setState(() {
@@ -1428,10 +1286,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       _message('Unable to change password.');
     }
   }
-
-  // ============================================================
-  // PASSWORD FIELD
-  // ============================================================
 
   Widget _passwordField({
     required TextEditingController controller,
@@ -1471,9 +1325,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   @override
   void dispose() {
     _currentPasswordController.dispose();
-
     _newPasswordController.dispose();
-
     _confirmPasswordController.dispose();
 
     super.dispose();
@@ -1488,14 +1340,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
-
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ==================================================
-          // HEADER
-          // ==================================================
-
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -1513,9 +1360,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     size: 32,
                   ),
                 ),
-
                 SizedBox(width: 14),
-
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1528,9 +1373,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-
                       SizedBox(height: 4),
-
                       Text(
                         'Enter your current password and choose a new password.',
                         style: TextStyle(color: Colors.white70, fontSize: 12),
@@ -1541,9 +1384,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               ],
             ),
           ),
-
           const SizedBox(height: 24),
-
           _passwordField(
             controller: _currentPasswordController,
             label: 'Current Password',
@@ -1554,7 +1395,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               });
             },
           ),
-
           _passwordField(
             controller: _newPasswordController,
             label: 'New Password',
@@ -1565,7 +1405,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               });
             },
           ),
-
           _passwordField(
             controller: _confirmPasswordController,
             label: 'Confirm New Password',
@@ -1576,9 +1415,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               });
             },
           ),
-
           const SizedBox(height: 8),
-
           SizedBox(
             width: double.infinity,
             height: 52,
