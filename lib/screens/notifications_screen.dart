@@ -14,28 +14,21 @@ class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  State<NotificationsScreen> createState() =>
-      _NotificationsScreenState();
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
-class _NotificationsScreenState
-    extends State<NotificationsScreen> {
-  final SupabaseClient _supabase =
-      Supabase.instance.client;
+class _NotificationsScreenState extends State<NotificationsScreen> {
+  final SupabaseClient _supabase = Supabase.instance.client;
 
-  final MeshService _meshService =
-      MeshService.instance;
+  final MeshService _meshService = MeshService.instance;
 
-  static final Set<String>
-      _dismissedNotificationIds = {};
+  static final Set<String> _dismissedNotificationIds = {};
 
   RealtimeChannel? _sosChannel;
 
-  StreamSubscription<Map<String, dynamic>>?
-      _meshSosSubscription;
+  StreamSubscription<Map<String, dynamic>>? _meshSosSubscription;
 
-  final List<Map<String, dynamic>>
-      _notifications = [];
+  final List<Map<String, dynamic>> _notifications = [];
 
   bool _isLoading = true;
 
@@ -61,16 +54,11 @@ class _NotificationsScreenState
   // ============================================================
 
   void _listenForMeshSos() {
-    _meshSosSubscription =
-        _meshService.sosStream.listen(
+    _meshSosSubscription = _meshService.sosStream.listen(
       (data) {
         if (!mounted) return;
 
-        final String type =
-            data['type']
-                    ?.toString()
-                    .toUpperCase() ??
-                '';
+        final String type = data['type']?.toString().toUpperCase() ?? '';
 
         if (type == 'SOS_CANCELLED') {
           _handleOfflineSosCancelled(data);
@@ -82,9 +70,7 @@ class _NotificationsScreenState
         }
       },
       onError: (error) {
-        debugPrint(
-          'MESH SOS STREAM ERROR: $error',
-        );
+        debugPrint('MESH SOS STREAM ERROR: $error');
       },
     );
   }
@@ -93,45 +79,32 @@ class _NotificationsScreenState
   // HANDLE OFFLINE SOS
   // ============================================================
 
-  void _handleOfflineSos(
-    Map<String, dynamic> data,
-  ) {
+  void _handleOfflineSos(Map<String, dynamic> data) {
     if (!mounted) return;
 
-    final String sosId =
-        data['sosId']?.toString() ?? '';
+    final String sosId = data['sosId']?.toString() ?? '';
 
     if (sosId.isEmpty) {
-      debugPrint(
-        'OFFLINE SOS IGNORED: Missing SOS ID',
-      );
+      debugPrint('OFFLINE SOS IGNORED: Missing SOS ID');
       return;
     }
 
-    final String senderName =
-        data['senderName']?.toString() ??
-            'Unknown user';
+    final String senderName = data['senderName']?.toString() ?? 'Unknown user';
 
     final String location =
-        data['location']?.toString() ??
-            'Location unavailable';
+        data['location']?.toString() ?? 'Location unavailable';
 
     final String message =
-        data['message']?.toString() ??
-            'Emergency SOS received';
+        data['message']?.toString() ?? 'Emergency SOS received';
 
-    final String notificationId =
-        'offline_sos_$sosId';
+    final String notificationId = 'offline_sos_$sosId';
 
-    if (_dismissedNotificationIds
-        .contains(notificationId)) {
+    if (_dismissedNotificationIds.contains(notificationId)) {
       return;
     }
 
-    final bool alreadyExists =
-        _notifications.any(
-      (notification) =>
-          notification['id'] == notificationId,
+    final bool alreadyExists = _notifications.any(
+      (notification) => notification['id'] == notificationId,
     );
 
     if (alreadyExists) {
@@ -146,114 +119,90 @@ class _NotificationsScreenState
       'subtitle':
           '$senderName needs emergency assistance near $location. '
           'Message: $message',
-      'created_at':
-          DateTime.now().toIso8601String(),
+      'created_at': DateTime.now().toIso8601String(),
       'senderName': senderName,
       'location': location,
     };
 
     setState(() {
-      _notifications.insert(
-        0,
-        notification,
-      );
+      _notifications.insert(0, notification);
     });
 
-    _showOfflineSosDialog(
-      senderName: senderName,
-      location: location,
-    );
+    _showOfflineSosDialog(senderName: senderName, location: location);
   }
 
   // ============================================================
   // HANDLE OFFLINE SOS CANCELLATION
   // ============================================================
 
-  void _handleOfflineSosCancelled(
-    Map<String, dynamic> data,
-  ) {
+  void _handleOfflineSosCancelled(Map<String, dynamic> data) {
     if (!mounted) return;
 
-    final String sosId =
-        data['sosId']?.toString() ?? '';
+    final String sosId = data['sosId']?.toString() ?? '';
 
     if (sosId.isEmpty) {
-      debugPrint(
-        'OFFLINE SOS CANCELLATION IGNORED: Missing SOS ID',
-      );
+      debugPrint('OFFLINE SOS CANCELLATION IGNORED: Missing SOS ID');
       return;
     }
 
     final String senderName =
-        data['senderName']?.toString() ??
-            'Unknown TrekCure User';
+        data['senderName']?.toString() ?? 'Unknown TrekCure User';
 
-    final String originalNotificationId =
-        'offline_sos_$sosId';
+    final String reason = data['reason']?.toString().trim().isNotEmpty == true
+        ? data['reason'].toString().trim()
+        : 'Not specified';
 
-    final String cancellationNotificationId =
-        'offline_sos_cancelled_$sosId';
+    final String originalNotificationId = 'offline_sos_$sosId';
 
-    if (_dismissedNotificationIds
-        .contains(cancellationNotificationId)) {
+    final String cancellationNotificationId = 'offline_sos_cancelled_$sosId';
+
+    if (_dismissedNotificationIds.contains(cancellationNotificationId)) {
       return;
     }
 
-    final bool cancellationAlreadyExists =
-        _notifications.any(
-      (notification) =>
-          notification['id'] ==
-              cancellationNotificationId,
+    final bool cancellationAlreadyExists = _notifications.any(
+      (notification) => notification['id'] == cancellationNotificationId,
     );
 
     if (cancellationAlreadyExists) {
       return;
     }
 
-    // Remove the original SOS notification.
-    final Map<String, dynamic>? originalSos =
-        _notifications.cast<Map<String, dynamic>?>()
-            .firstWhere(
-      (notification) =>
-          notification?['id'] ==
-              originalNotificationId,
-      orElse: () => null,
-    );
+    final Map<String, dynamic>? originalSos = _notifications
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (notification) => notification?['id'] == originalNotificationId,
+          orElse: () => null,
+        );
 
     final String location =
-        originalSos?['location']
-                ?.toString() ??
-            'Location unavailable';
+        originalSos?['location']?.toString() ?? 'Location unavailable';
 
     setState(() {
       _notifications.removeWhere(
-        (notification) =>
-            notification['id'] ==
-            originalNotificationId,
+        (notification) => notification['id'] == originalNotificationId,
       );
 
-      _notifications.insert(
-        0,
-        {
-          'id': cancellationNotificationId,
-          'sosId': sosId,
-          'type': 'offline_sos_cancelled',
-          'title':
-              '📡 OFFLINE SOS CANCELLED',
-          'subtitle':
-              '$senderName has cancelled the offline emergency SOS. '
-              'Last known location: $location.',
-          'created_at':
-              DateTime.now().toIso8601String(),
-          'senderName': senderName,
-          'location': location,
-        },
-      );
+      _notifications.insert(0, {
+        'id': cancellationNotificationId,
+        'sosId': sosId,
+        'type': 'offline_sos_cancelled',
+        'title': '📡 OFFLINE SOS CANCELLED',
+        'subtitle':
+            '$senderName has cancelled the offline emergency SOS. '
+            'Reason: $reason. '
+            'Last known location: $location.',
+        'created_at': DateTime.now().toIso8601String(),
+        'senderName': senderName,
+        'location': location,
+        'cancellation_reason': reason,
+      });
     });
 
     _showOfflineSosCancelledDialog(
       senderName: senderName,
       location: location,
+      reason: reason,
     );
   }
 
@@ -269,13 +218,9 @@ class _NotificationsScreenState
     });
 
     try {
-      final Position position =
-          await _getCurrentLocation();
+      final Position position = await _getCurrentLocation();
 
-      await _fetchReverseGeocode(
-        position.latitude,
-        position.longitude,
-      );
+      await _fetchReverseGeocode(position.latitude, position.longitude);
 
       final Uri url = Uri.parse(
         'https://api.open-meteo.com/v1/forecast'
@@ -285,46 +230,29 @@ class _NotificationsScreenState
         '&timezone=auto',
       );
 
-      final response = await http
-          .get(url)
-          .timeout(
-            const Duration(seconds: 6),
-          );
+      final response = await http.get(url).timeout(const Duration(seconds: 6));
 
       double temp = 28.0;
       double wind = 12.0;
       int weatherCode = 0;
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data =
-            jsonDecode(response.body);
+        final Map<String, dynamic> data = jsonDecode(response.body);
 
-        final Map<String, dynamic> current =
-            data['current'];
+        final Map<String, dynamic> current = data['current'];
 
-        temp =
-            (current['temperature_2m'] as num)
-                .toDouble();
+        temp = (current['temperature_2m'] as num).toDouble();
 
-        wind =
-            (current['wind_speed_10m'] as num)
-                .toDouble();
+        wind = (current['wind_speed_10m'] as num).toDouble();
 
-        weatherCode =
-            (current['weather_code'] as num)
-                .toInt();
+        weatherCode = (current['weather_code'] as num).toInt();
       }
 
       final Random random = Random(
-        (position.latitude * 100).toInt() +
-            (position.longitude * 100).toInt(),
+        (position.latitude * 100).toInt() + (position.longitude * 100).toInt(),
       );
 
-      final int crowdPercentage =
-          (20 +
-                  random.nextDouble() *
-                      70)
-              .round();
+      final int crowdPercentage = (20 + random.nextDouble() * 70).round();
 
       if (!mounted) return;
 
@@ -339,9 +267,7 @@ class _NotificationsScreenState
         _isLoading = false;
       });
     } catch (e) {
-      debugPrint(
-        'Notification generation error: $e',
-      );
+      debugPrint('Notification generation error: $e');
 
       if (!mounted) return;
 
@@ -362,10 +288,7 @@ class _NotificationsScreenState
   // REVERSE GEOCODE
   // ============================================================
 
-  Future<void> _fetchReverseGeocode(
-    double lat,
-    double lon,
-  ) async {
+  Future<void> _fetchReverseGeocode(double lat, double lon) async {
     try {
       final Uri geoUrl = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse'
@@ -375,70 +298,47 @@ class _NotificationsScreenState
       );
 
       final response = await http
-          .get(
-            geoUrl,
-            headers: {
-              'User-Agent':
-                  'TrekCureApp/1.0',
-            },
-          )
-          .timeout(
-            const Duration(seconds: 4),
-          );
+          .get(geoUrl, headers: {'User-Agent': 'TrekCureApp/1.0'})
+          .timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data =
-            jsonDecode(response.body);
+        final Map<String, dynamic> data = jsonDecode(response.body);
 
-        final Map<String, dynamic>? address =
-            data['address'];
+        final Map<String, dynamic>? address = data['address'];
 
         if (address != null) {
           _currentArea =
               address['suburb'] ??
-                  address['neighbourhood'] ??
-                  address['city'] ??
-                  address['town'] ??
-                  'Central Trail';
+              address['neighbourhood'] ??
+              address['city'] ??
+              address['town'] ??
+              'Central Trail';
         }
       }
     } catch (_) {}
   }
 
   Future<Position> _getCurrentLocation() async {
-    final bool serviceEnabled =
-        await Geolocator
-            .isLocationServiceEnabled();
+    final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
     if (!serviceEnabled) {
-      throw Exception(
-        'Location services disabled.',
-      );
+      throw Exception('Location services disabled.');
     }
 
-    LocationPermission permission =
-        await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
 
-    if (permission ==
-        LocationPermission.denied) {
-      permission =
-          await Geolocator.requestPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
     }
 
-    if (permission ==
-            LocationPermission.denied ||
-        permission ==
-            LocationPermission.deniedForever) {
-      throw Exception(
-        'Location permission denied.',
-      );
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      throw Exception('Location permission denied.');
     }
 
     return Geolocator.getCurrentPosition(
-      locationSettings:
-          const LocationSettings(
-        accuracy:
-            LocationAccuracy.medium,
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.medium,
       ),
     );
   }
@@ -455,114 +355,70 @@ class _NotificationsScreenState
   }) {
     final DateTime now = DateTime.now();
 
-    final List<Map<String, dynamic>>
-        items = [];
+    final List<Map<String, dynamic>> items = [];
 
     if (crowdPercentage > 50 &&
-        !_dismissedNotificationIds
-            .contains('crowd-alert')) {
+        !_dismissedNotificationIds.contains('crowd-alert')) {
       items.add({
         'id': 'crowd-alert',
         'type': 'crowd',
-        'title':
-            'High Footfall Warning',
+        'title': 'High Footfall Warning',
         'subtitle':
             'Dense tourist surge detected near $_currentArea. Bottlenecks likely.',
         'created_at': now
-            .subtract(
-              const Duration(minutes: 8),
-            )
+            .subtract(const Duration(minutes: 8))
             .toIso8601String(),
       });
     }
 
-    final String weatherDesc =
-        _weatherCodeToDescription(
-      weatherCode,
-    );
+    final String weatherDesc = _weatherCodeToDescription(weatherCode);
 
-    final bool isSevere =
-        weatherCode >= 51 ||
-            wind > 25;
+    final bool isSevere = weatherCode >= 51 || wind > 25;
 
-    if (!_dismissedNotificationIds
-        .contains('weather-alert')) {
+    if (!_dismissedNotificationIds.contains('weather-alert')) {
       items.add({
         'id': 'weather-alert',
         'type': 'weather',
-        'title': isSevere
-            ? 'Adverse Weather Advisory'
-            : 'Live Weather Update',
+        'title': isSevere ? 'Adverse Weather Advisory' : 'Live Weather Update',
         'subtitle':
             '${temp.round()}°C • $weatherDesc • '
             'Wind ${wind.round()} km/h recorded in $_currentArea.',
         'created_at': now
-            .subtract(
-              const Duration(minutes: 24),
-            )
+            .subtract(const Duration(minutes: 24))
             .toIso8601String(),
       });
     }
 
-    if (!_dismissedNotificationIds
-        .contains('mesh-status')) {
+    if (!_dismissedNotificationIds.contains('mesh-status')) {
       items.add({
         'id': 'mesh-status',
         'type': 'mesh',
-        'title':
-            'Offline Mesh Network Active',
-        'subtitle':
-            'Nearby emergency relay connections are available for offline SOS communication.',
+        'title': 'Offline Mesh Network Active',
+        'subtitle': 'Nearby emergency relay connections are available for offline SOS communication.',
         'created_at': now
-            .subtract(
-              const Duration(
-                hours: 1,
-                minutes: 15,
-              ),
-            )
+            .subtract(const Duration(hours: 1, minutes: 15))
             .toIso8601String(),
       });
     }
 
-    final existingSos =
-        _notifications.where(
-      (notification) {
-        final String type =
-            notification['type']
-                    ?.toString() ??
-                '';
+    final existingSos = _notifications.where((notification) {
+      final String type = notification['type']?.toString() ?? '';
 
-        return (type == 'sos' ||
-                type == 'sos_cancelled' ||
-                type == 'offline_sos' ||
-                type ==
-                    'offline_sos_cancelled') &&
-            !_dismissedNotificationIds
-                .contains(
-              notification['id']
-                  ?.toString(),
-            );
-      },
-    );
+      return (type == 'sos' ||
+              type == 'sos_cancelled' ||
+              type == 'offline_sos' ||
+              type == 'offline_sos_cancelled') &&
+          !_dismissedNotificationIds.contains(notification['id']?.toString());
+    });
 
     items.addAll(existingSos);
 
     items.sort((a, b) {
       final DateTime aDate =
-          DateTime.tryParse(
-                a['created_at']
-                        ?.toString() ??
-                    '',
-              ) ??
-              now;
+          DateTime.tryParse(a['created_at']?.toString() ?? '') ?? now;
 
       final DateTime bDate =
-          DateTime.tryParse(
-                b['created_at']
-                        ?.toString() ??
-                    '',
-              ) ??
-              now;
+          DateTime.tryParse(b['created_at']?.toString() ?? '') ?? now;
 
       return bDate.compareTo(aDate);
     });
@@ -572,9 +428,7 @@ class _NotificationsScreenState
     _notifications.addAll(items);
   }
 
-  String _weatherCodeToDescription(
-    int code,
-  ) {
+  String _weatherCodeToDescription(int code) {
     if (code == 0) {
       return 'Clear Sky';
     }
@@ -608,42 +462,40 @@ class _NotificationsScreenState
 
   void _listenForSos() {
     _sosChannel = _supabase
-        .channel(
-          'sos-alerts-channel',
-        )
+        .channel('sos-alerts-channel')
         .onPostgresChanges(
-          event:
-              PostgresChangeEvent.insert,
+          event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'sos_alerts',
           callback: (payload) {
-            final newSos =
-                payload.newRecord;
+            final newSos = payload.newRecord;
 
-            final String sosId =
-                newSos['id']
-                        ?.toString() ??
-                    '';
+            final String sosId = newSos['id']?.toString() ?? '';
 
             if (sosId.isEmpty) {
               return;
             }
 
-            final String notificationId =
-                'online_sos_$sosId';
+            // Do not create an incoming notification on
+            // the same device/user that triggered the SOS.
+            final String currentUserId = _supabase.auth.currentUser?.id ?? '';
 
-            if (_dismissedNotificationIds
-                .contains(notificationId)) {
+            final String sosUserId = newSos['user_id']?.toString() ?? '';
+
+            if (currentUserId.isNotEmpty && currentUserId == sosUserId) {
+              return;
+            }
+
+            final String notificationId = 'online_sos_$sosId';
+
+            if (_dismissedNotificationIds.contains(notificationId)) {
               return;
             }
 
             if (!mounted) return;
 
-            final bool alreadyExists =
-                _notifications.any(
-              (notification) =>
-                  notification['id'] ==
-                      notificationId,
+            final bool alreadyExists = _notifications.any(
+              (notification) => notification['id'] == notificationId,
             );
 
             if (alreadyExists) {
@@ -651,110 +503,105 @@ class _NotificationsScreenState
             }
 
             setState(() {
-              _notifications.insert(
-                0,
-                {
-                  'id': notificationId,
-                  'sosId': sosId,
-                  'type': 'sos',
-                  'title':
-                      '🚨 SOS EMERGENCY ALERT',
-                  'subtitle':
-                      'A tourist triggered an emergency distress beacon near $_currentArea!',
-                  'created_at':
-                      newSos['created_at']
-                              ?.toString() ??
-                          DateTime.now()
-                              .toIso8601String(),
-                },
-              );
+              _notifications.insert(0, {
+                'id': notificationId,
+                'sosId': sosId,
+                'type': 'sos',
+                'title': '🚨 SOS EMERGENCY ALERT',
+                'subtitle':
+                    'A tourist triggered an emergency distress beacon near $_currentArea!',
+                'created_at':
+                    newSos['created_at']?.toString() ??
+                    DateTime.now().toIso8601String(),
+              });
             });
           },
         )
         .onPostgresChanges(
-          event:
-              PostgresChangeEvent.update,
+          event: PostgresChangeEvent.update,
           schema: 'public',
           table: 'sos_alerts',
           callback: (payload) {
-            final updatedSos =
-                payload.newRecord;
+            final updatedSos = payload.newRecord;
 
             final String sosStatus =
-                updatedSos['status']
-                        ?.toString()
-                        .toLowerCase() ??
-                    '';
+                updatedSos['status']?.toString().toLowerCase() ?? '';
 
             if (sosStatus != 'cancelled') {
               return;
             }
 
-            final String sosId =
-                updatedSos['id']
-                        ?.toString() ??
-                    '';
+            final String sosId = updatedSos['id']?.toString() ?? '';
 
             if (sosId.isEmpty) {
               return;
             }
 
-            final String originalNotificationId =
-                'online_sos_$sosId';
+            // The user who cancelled the SOS must NOT
+            // receive the "SOS CANCELLED" notification.
+            final String currentUserId = _supabase.auth.currentUser?.id ?? '';
+
+            final String sosUserId = updatedSos['user_id']?.toString() ?? '';
+
+            if (currentUserId.isNotEmpty && currentUserId == sosUserId) {
+              return;
+            }
+
+            final String originalNotificationId = 'online_sos_$sosId';
 
             final String cancellationNotificationId =
                 'online_sos_cancelled_$sosId';
 
-            if (_dismissedNotificationIds
-                .contains(
-                  cancellationNotificationId,
-                )) {
+            if (_dismissedNotificationIds.contains(
+              cancellationNotificationId,
+            )) {
               return;
             }
 
             if (!mounted) return;
 
-            final bool alreadyExists =
-                _notifications.any(
+            final bool alreadyExists = _notifications.any(
               (notification) =>
-                  notification['id'] ==
-                      cancellationNotificationId,
+                  notification['id'] == cancellationNotificationId,
             );
 
             if (alreadyExists) {
               return;
             }
 
+            final String reason =
+                updatedSos['cancellation_reason']
+                        ?.toString()
+                        .trim()
+                        .isNotEmpty ==
+                    true
+                ? updatedSos['cancellation_reason'].toString().trim()
+                : 'Not specified';
+
+            final String createdAt =
+                updatedSos['cancelled_at']?.toString() ??
+                updatedSos['updated_at']?.toString() ??
+                DateTime.now().toIso8601String();
+
             setState(() {
               _notifications.removeWhere(
-                (notification) =>
-                    notification['id'] ==
-                    originalNotificationId,
+                (notification) => notification['id'] == originalNotificationId,
               );
 
-              _notifications.insert(
-                0,
-                {
-                  'id':
-                      cancellationNotificationId,
-                  'sosId': sosId,
-                  'type':
-                      'sos_cancelled',
-                  'title':
-                      '✅ SOS CANCELLED',
-                  'subtitle':
-                      'The emergency distress signal has been cancelled. '
-                          'The tourist is no longer requesting emergency assistance.',
-                  'created_at':
-                      updatedSos['updated_at']
-                              ?.toString() ??
-                          DateTime.now()
-                              .toIso8601String(),
-                },
-              );
+              _notifications.insert(0, {
+                'id': cancellationNotificationId,
+                'sosId': sosId,
+                'type': 'sos_cancelled',
+                'title': '✅ SOS CANCELLED',
+                'subtitle':
+                    'The emergency SOS has been cancelled. '
+                    'Reason: $reason.',
+                'created_at': createdAt,
+                'cancellation_reason': reason,
+              });
             });
 
-            _showSosCancelledDialog();
+            _showSosCancelledDialog(reason: reason);
           },
         )
         .subscribe();
@@ -764,46 +611,37 @@ class _NotificationsScreenState
   // ONLINE SOS CANCELLED DIALOG
   // ============================================================
 
-  void _showSosCancelledDialog() {
+  void _showSosCancelledDialog({required String reason}) {
     if (!mounted) return;
 
     showDialog(
       context: context,
-      builder: (context) =>
-          AlertDialog(
+      builder: (context) => AlertDialog(
         title: const Row(
           children: [
-            Icon(
-              Icons.check_circle,
-              color:
-                  AppColors.primaryGreen,
-            ),
+            Icon(Icons.check_circle, color: AppColors.primaryGreen),
             SizedBox(width: 10),
             Expanded(
               child: Text(
                 'SOS CANCELLED',
                 style: TextStyle(
-                  color:
-                      AppColors.primaryGreen,
-                  fontWeight:
-                      FontWeight.bold,
+                  color: AppColors.primaryGreen,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
           ],
         ),
-        content: const Text(
-          'The tourist has cancelled the emergency distress signal. '
+        content: Text(
+          'The tourist has cancelled the emergency '
+          'distress signal.\n\n'
+          'Reason: $reason\n\n'
           'No further emergency assistance is currently requested.',
         ),
         actions: [
           ElevatedButton(
-            onPressed: () =>
-                Navigator.pop(context),
-            child:
-                const Text(
-              'Acknowledge',
-            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Acknowledge'),
           ),
         ],
       ),
@@ -822,24 +660,17 @@ class _NotificationsScreenState
 
     showDialog(
       context: context,
-      builder: (context) =>
-          AlertDialog(
+      builder: (context) => AlertDialog(
         title: const Row(
           children: [
-            Icon(
-              Icons.wifi_off,
-              color:
-                  AppColors.dangerRed,
-            ),
+            Icon(Icons.wifi_off, color: AppColors.dangerRed),
             SizedBox(width: 10),
             Expanded(
               child: Text(
                 'OFFLINE SOS RECEIVED',
                 style: TextStyle(
-                  color:
-                      AppColors.dangerRed,
-                  fontWeight:
-                      FontWeight.bold,
+                  color: AppColors.dangerRed,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
@@ -851,17 +682,11 @@ class _NotificationsScreenState
         ),
         actions: [
           ElevatedButton(
-            onPressed: () =>
-                Navigator.pop(context),
-            style:
-                ElevatedButton.styleFrom(
-              backgroundColor:
-                  AppColors.dangerRed,
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.dangerRed,
             ),
-            child:
-                const Text(
-              'Acknowledge',
-            ),
+            child: const Text('Acknowledge'),
           ),
         ],
       ),
@@ -875,29 +700,23 @@ class _NotificationsScreenState
   void _showOfflineSosCancelledDialog({
     required String senderName,
     required String location,
+    required String reason,
   }) {
     if (!mounted) return;
 
     showDialog(
       context: context,
-      builder: (context) =>
-          AlertDialog(
+      builder: (context) => AlertDialog(
         title: const Row(
           children: [
-            Icon(
-              Icons.check_circle,
-              color:
-                  AppColors.primaryGreen,
-            ),
+            Icon(Icons.check_circle, color: AppColors.primaryGreen),
             SizedBox(width: 10),
             Expanded(
               child: Text(
                 'OFFLINE SOS CANCELLED',
                 style: TextStyle(
-                  color:
-                      AppColors.primaryGreen,
-                  fontWeight:
-                      FontWeight.bold,
+                  color: AppColors.primaryGreen,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
@@ -905,16 +724,13 @@ class _NotificationsScreenState
         ),
         content: Text(
           '$senderName has cancelled the offline SOS.\n\n'
+          'Reason: $reason\n\n'
           'Last known location: $location',
         ),
         actions: [
           ElevatedButton(
-            onPressed: () =>
-                Navigator.pop(context),
-            child:
-                const Text(
-              'Acknowledge',
-            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Acknowledge'),
           ),
         ],
       ),
@@ -925,59 +741,35 @@ class _NotificationsScreenState
   // HELPERS
   // ============================================================
 
-  bool _isToday(
-    DateTime date,
-  ) {
-    final DateTime now =
-        DateTime.now();
+  bool _isToday(DateTime date) {
+    final DateTime now = DateTime.now();
 
-    final DateTime local =
-        date.toLocal();
+    final DateTime local = date.toLocal();
 
-    return local.year ==
-            now.year &&
-        local.month ==
-            now.month &&
-        local.day ==
-            now.day;
+    return local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day;
   }
 
-  String _formatTime(
-    dynamic value,
-  ) {
+  String _formatTime(dynamic value) {
     if (value == null) return '';
 
-    final DateTime? date =
-        DateTime.tryParse(
-      value.toString(),
-    );
+    final DateTime? date = DateTime.tryParse(value.toString());
 
     if (date == null) return '';
 
-    final DateTime local =
-        date.toLocal();
+    final DateTime local = date.toLocal();
 
-    final int hour =
-        local.hour % 12 == 0
-            ? 12
-            : local.hour % 12;
+    final int hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
 
-    final String minute =
-        local.minute
-            .toString()
-            .padLeft(2, '0');
+    final String minute = local.minute.toString().padLeft(2, '0');
 
-    final String suffix =
-        local.hour >= 12
-            ? 'PM'
-            : 'AM';
+    final String suffix = local.hour >= 12 ? 'PM' : 'AM';
 
     return '$hour:$minute $suffix';
   }
 
-  IconData _iconForType(
-    String type,
-  ) {
+  IconData _iconForType(String type) {
     switch (type) {
       case 'sos':
         return Icons.emergency;
@@ -1005,9 +797,7 @@ class _NotificationsScreenState
     }
   }
 
-  Color _colorForType(
-    String type,
-  ) {
+  Color _colorForType(String type) {
     switch (type) {
       case 'sos':
       case 'offline_sos':
@@ -1031,9 +821,7 @@ class _NotificationsScreenState
     }
   }
 
-  Color _backgroundForType(
-    String type,
-  ) {
+  Color _backgroundForType(String type) {
     switch (type) {
       case 'sos':
       case 'offline_sos':
@@ -1062,9 +850,7 @@ class _NotificationsScreenState
     _meshSosSubscription?.cancel();
 
     if (_sosChannel != null) {
-      _supabase.removeChannel(
-        _sosChannel!,
-      );
+      _supabase.removeChannel(_sosChannel!);
     }
 
     super.dispose();
@@ -1072,44 +858,25 @@ class _NotificationsScreenState
 
   Widget _emptyState() {
     return RefreshIndicator(
-      onRefresh:
-          _loadLiveConditions,
+      onRefresh: _loadLiveConditions,
       child: ListView(
-        physics:
-            const AlwaysScrollableScrollPhysics(),
-        padding:
-            const EdgeInsets.symmetric(
-          horizontal: 24,
-          vertical: 100,
-        ),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 100),
         children: const [
-          Icon(
-            Icons.notifications_none,
-            size: 64,
-            color:
-                AppColors.textGrey,
-          ),
+          Icon(Icons.notifications_none, size: 64, color: AppColors.textGrey),
           SizedBox(height: 16),
           Center(
             child: Text(
               'No notifications',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight:
-                    FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
           SizedBox(height: 8),
           Center(
             child: Text(
               'All safety and travel updates have been cleared.',
-              textAlign:
-                  TextAlign.center,
-              style: TextStyle(
-                color:
-                    AppColors.textGrey,
-              ),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textGrey),
             ),
           ),
         ],
@@ -1122,171 +889,105 @@ class _NotificationsScreenState
   // ============================================================
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final List<Map<String, dynamic>>
-        todayNotifications =
-        _notifications.where(
-      (notification) {
-        final DateTime? date =
-            DateTime.tryParse(
-          notification['created_at']
-                  ?.toString() ??
-              '',
-        );
+  Widget build(BuildContext context) {
+    final List<Map<String, dynamic>> todayNotifications = _notifications.where((
+      notification,
+    ) {
+      final DateTime? date = DateTime.tryParse(
+        notification['created_at']?.toString() ?? '',
+      );
 
-        return date != null &&
-            _isToday(date);
-      },
-    ).toList();
+      return date != null && _isToday(date);
+    }).toList();
 
-    final List<Map<String, dynamic>>
-        earlierNotifications =
-        _notifications.where(
-      (notification) {
-        final DateTime? date =
-            DateTime.tryParse(
-          notification['created_at']
-                  ?.toString() ??
-              '',
-        );
+    final List<Map<String, dynamic>> earlierNotifications = _notifications
+        .where((notification) {
+          final DateTime? date = DateTime.tryParse(
+            notification['created_at']?.toString() ?? '',
+          );
 
-        return date == null ||
-            !_isToday(date);
-      },
-    ).toList();
+          return date == null || !_isToday(date);
+        })
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
-        leading:
-            const BackButton(),
+        leading: const BackButton(),
         title: const Text(
           'Notifications',
-          style: TextStyle(
-            fontWeight:
-                FontWeight.bold,
-            fontSize: 17,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
         ),
         actions: [
           IconButton(
             tooltip: 'Refresh',
-            onPressed:
-                _loadLiveConditions,
-            icon:
-                const Icon(Icons.refresh),
+            onPressed: _loadLiveConditions,
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(
-              child:
-                  CircularProgressIndicator(),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : _notifications.isEmpty
-              ? _emptyState()
-              : RefreshIndicator(
-                  onRefresh:
-                      _loadLiveConditions,
-                  child: ListView(
-                    physics:
-                        const AlwaysScrollableScrollPhysics(),
-                    padding:
-                        const EdgeInsets.all(16),
-                    children: [
-                      if (todayNotifications
-                          .isNotEmpty) ...[
-                        const Text(
-                          'Today',
-                          style: TextStyle(
-                            fontWeight:
-                                FontWeight.bold,
-                            fontSize: 14,
-                            color:
-                                AppColors.textGrey,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        ...todayNotifications.map(
-                          (notification) =>
-                              Padding(
-                            padding:
-                                const EdgeInsets.only(
-                              bottom: 12,
-                            ),
-                            child:
-                                _buildNotificationCard(
-                              notification,
-                            ),
-                          ),
-                        ),
-                      ],
-                      if (earlierNotifications
-                          .isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Earlier',
-                          style: TextStyle(
-                            fontWeight:
-                                FontWeight.bold,
-                            fontSize: 14,
-                            color:
-                                AppColors.textGrey,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        ...earlierNotifications.map(
-                          (notification) =>
-                              Padding(
-                            padding:
-                                const EdgeInsets.only(
-                              bottom: 12,
-                            ),
-                            child:
-                                _buildNotificationCard(
-                              notification,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+          ? _emptyState()
+          : RefreshIndicator(
+              onRefresh: _loadLiveConditions,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                children: [
+                  if (todayNotifications.isNotEmpty) ...[
+                    const Text(
+                      'Today',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: AppColors.textGrey,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ...todayNotifications.map(
+                      (notification) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _buildNotificationCard(notification),
+                      ),
+                    ),
+                  ],
+                  if (earlierNotifications.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Earlier',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: AppColors.textGrey,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ...earlierNotifications.map(
+                      (notification) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _buildNotificationCard(notification),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
     );
   }
 
-  Widget _buildNotificationCard(
-    Map<String, dynamic> notification,
-  ) {
-    final String type =
-        notification['type']
-                ?.toString() ??
-            'info';
+  Widget _buildNotificationCard(Map<String, dynamic> notification) {
+    final String type = notification['type']?.toString() ?? 'info';
 
-    final String title =
-        notification['title']
-                ?.toString() ??
-            'Notification';
+    final String title = notification['title']?.toString() ?? 'Notification';
 
-    final String subtitle =
-        notification['subtitle']
-                ?.toString() ??
-            '';
+    final String subtitle = notification['subtitle']?.toString() ?? '';
 
-    final String id =
-        notification['id']
-                ?.toString() ??
-            '';
+    final String id = notification['id']?.toString() ?? '';
 
     return Dismissible(
-      key: ValueKey(
-        id.isNotEmpty
-            ? id
-            : notification.hashCode,
-      ),
-      direction:
-          DismissDirection.endToStart,
+      key: ValueKey(id.isNotEmpty ? id : notification.hashCode),
+      direction: DismissDirection.endToStart,
       onDismissed: (_) {
         setState(() {
           if (id.isNotEmpty) {
@@ -1298,74 +999,51 @@ class _NotificationsScreenState
       },
       background: Container(
         decoration: BoxDecoration(
-          color:
-              AppColors.dangerRed,
-          borderRadius:
-              BorderRadius.circular(16),
+          color: AppColors.dangerRed,
+          borderRadius: BorderRadius.circular(16),
         ),
-        alignment:
-            Alignment.centerRight,
-        padding:
-            const EdgeInsets.only(right: 20),
-        child: const Icon(
-          Icons.delete,
-          color: Colors.white,
-        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete, color: Colors.white),
       ),
       child: AppCard(
-        color:
-            _backgroundForType(type),
+        color: _backgroundForType(type),
         child: Padding(
-          padding:
-              const EdgeInsets.symmetric(
-            vertical: 4,
-            horizontal: 2,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
           child: Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 42,
                 height: 42,
-                decoration:
-                    BoxDecoration(
-                  color:
-                      _colorForType(type)
-                          .withOpacity(0.14),
-                  shape:
-                      BoxShape.circle,
+                decoration: BoxDecoration(
+                  color: _colorForType(type).withOpacity(0.14),
+                  shape: BoxShape.circle,
                 ),
                 child: Icon(
                   _iconForType(type),
-                  color:
-                      _colorForType(type),
+                  color: _colorForType(type),
                   size: 22,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
-                      style:
-                          const TextStyle(
-                        fontWeight:
-                            FontWeight.bold,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
                         fontSize: 15,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style:
-                          const TextStyle(
+                      style: const TextStyle(
                         fontSize: 13,
-                        color:
-                            AppColors.textGrey,
+                        color: AppColors.textGrey,
                         height: 1.3,
                       ),
                     ),
@@ -1374,16 +1052,11 @@ class _NotificationsScreenState
               ),
               const SizedBox(width: 8),
               Text(
-                _formatTime(
-                  notification['created_at'],
-                ),
-                style:
-                    const TextStyle(
+                _formatTime(notification['created_at']),
+                style: const TextStyle(
                   fontSize: 12,
-                  color:
-                      AppColors.textGrey,
-                  fontWeight:
-                      FontWeight.w500,
+                  color: AppColors.textGrey,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],

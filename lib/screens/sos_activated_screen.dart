@@ -7,22 +7,16 @@ import '../theme/app_theme.dart';
 class SosActivatedScreen extends StatefulWidget {
   final String? sosId;
 
-  const SosActivatedScreen({
-    super.key,
-    this.sosId,
-  });
+  const SosActivatedScreen({super.key, this.sosId});
 
   @override
-  State<SosActivatedScreen> createState() =>
-      _SosActivatedScreenState();
+  State<SosActivatedScreen> createState() => _SosActivatedScreenState();
 }
 
-class _SosActivatedScreenState
-    extends State<SosActivatedScreen> {
+class _SosActivatedScreenState extends State<SosActivatedScreen> {
   bool _isCancelling = false;
 
-  final MeshService _meshService =
-      MeshService.instance;
+  final MeshService _meshService = MeshService.instance;
 
   // ============================================================
   // CHECK IF THIS IS AN OFFLINE SOS
@@ -33,13 +27,13 @@ class _SosActivatedScreenState
   // ============================================================
 
   bool get _isOfflineSos {
-  final sosId = widget.sosId;
+    final sosId = widget.sosId;
 
-  return sosId == null ||
-      sosId.isEmpty ||
-      sosId == 'offline-demo' ||
-      sosId.startsWith('offline_');
-}
+    return sosId == null ||
+        sosId.isEmpty ||
+        sosId == 'offline-demo' ||
+        sosId.startsWith('offline_');
+  }
 
   // ============================================================
   // CANCEL SOS
@@ -47,6 +41,16 @@ class _SosActivatedScreenState
 
   Future<void> _cancelSos() async {
     if (_isCancelling) {
+      return;
+    }
+
+    final String? reason = await _showCancellationReasonDialog();
+
+    if (reason == null || reason.trim().isEmpty) {
+      return;
+    }
+
+    if (!mounted) {
       return;
     }
 
@@ -61,26 +65,17 @@ class _SosActivatedScreenState
 
       if (_isOfflineSos) {
         debugPrint('');
-        debugPrint(
-          '================================',
-        );
-        debugPrint(
-          'CANCELLING OFFLINE SOS',
-        );
-        debugPrint(
-          'SOS ID: ${widget.sosId}',
-        );
+        debugPrint('================================');
+        debugPrint('CANCELLING OFFLINE SOS');
+        debugPrint('SOS ID: ${widget.sosId}');
+        debugPrint('Reason: $reason');
         debugPrint(
           'Connected devices: '
           '${_meshService.nearbyNodeCount}',
         );
-        debugPrint(
-          '================================',
-        );
+        debugPrint('================================');
         debugPrint('');
 
-        // Make sure the offline mesh
-        // is still active.
         if (!_meshService.isRunning) {
           throw Exception(
             'Offline mesh is no longer active. '
@@ -88,35 +83,21 @@ class _SosActivatedScreenState
           );
         }
 
-        // ========================================================
-        // BROADCAST SOS CANCELLATION
-        //
-        // The SAME SOS ID that was used
-        // when the SOS was originally sent
-        // is sent to all nearby devices.
-        // ========================================================
-
         await _meshService.broadcastSosCancellation(
-  sosId: widget.sosId ?? 'offline-demo',
-);
+          sosId: widget.sosId ?? 'offline-demo',
+          reason: reason,
+        );
 
         debugPrint('');
-        debugPrint(
-          '================================',
-        );
-        debugPrint(
-          'OFFLINE SOS CANCELLED SUCCESSFULLY',
-        );
-        debugPrint(
-          'SOS ID: ${widget.sosId}',
-        );
+        debugPrint('================================');
+        debugPrint('OFFLINE SOS CANCELLED SUCCESSFULLY');
+        debugPrint('SOS ID: ${widget.sosId}');
+        debugPrint('Reason: $reason');
         debugPrint(
           'Nearby devices notified: '
           '${_meshService.nearbyNodeCount}',
         );
-        debugPrint(
-          '================================',
-        );
+        debugPrint('================================');
         debugPrint('');
 
         if (!mounted) {
@@ -124,18 +105,15 @@ class _SosActivatedScreenState
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Offline SOS cancelled. '
-              'Nearby devices notified.',
+              'Offline SOS cancelled. Nearby devices notified.\nReason: $reason',
             ),
-            backgroundColor:
-                AppColors.primaryGreen,
+            backgroundColor: AppColors.primaryGreen,
           ),
         );
 
         Navigator.pop(context);
-
         return;
       }
 
@@ -143,82 +121,69 @@ class _SosActivatedScreenState
       // ONLINE SOS CANCELLATION
       // ==========================================================
 
-      if (widget.sosId == null ||
-          widget.sosId!.trim().isEmpty) {
-        throw Exception(
-          'Invalid SOS ID.',
-        );
+      if (widget.sosId == null || widget.sosId!.trim().isEmpty) {
+        throw Exception('Invalid SOS ID.');
       }
 
       debugPrint('');
-      debugPrint(
-        '================================',
-      );
-      debugPrint(
-        'CANCELLING ONLINE SOS',
-      );
-      debugPrint(
-        'SOS ID: ${widget.sosId}',
-      );
-      debugPrint(
-        '================================',
-      );
+      debugPrint('================================');
+      debugPrint('CANCELLING ONLINE SOS');
+      debugPrint('SOS ID: ${widget.sosId}');
+      debugPrint('Reason: $reason');
+      debugPrint('================================');
       debugPrint('');
 
       await Supabase.instance.client
-    .from('sos_alerts')
-    .update({
-      'status': 'cancelled',
-    })
-    .eq(
-      'id',
-      widget.sosId!,
-    );
+          .from('sos_alerts')
+          .update({
+            'status': 'cancelled',
+            'cancellation_reason': reason,
+            'cancelled_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', widget.sosId!);
 
-// Send FCM push notification for SOS cancellation.
-final response = await Supabase.instance.client.functions.invoke(
-  'send-sos-notification',
-  body: {
-    'sosId': widget.sosId,
-    'type': 'cancelled',
-  },
-);
+      // The database update is the source of truth.
+      // Supabase Realtime handles the in-app cancellation
+      // notification. This FCM call handles push notification.
+      try {
+        final response = await Supabase.instance.client.functions.invoke(
+          'send-sos-notification',
+          body: {'sosId': widget.sosId, 'type': 'cancelled', 'reason': reason},
+        );
 
-debugPrint(
-  'SOS cancellation notification response: ${response.data}',
-);
+        debugPrint(
+          'SOS cancellation notification response: '
+          '${response.data}',
+        );
+      } catch (notificationError) {
+        // Do not treat a push-notification failure as a
+        // cancellation failure. The SOS is already cancelled
+        // in Supabase and Realtime can still notify the other user.
+        debugPrint(
+          'FCM cancellation notification failed: '
+          '$notificationError',
+        );
+      }
 
-debugPrint(
-  'SOS cancellation notification response: ${response.data}',
-);      
+      if (!mounted) {
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'SOS cancelled successfully',
-          ),
-          backgroundColor:
-              AppColors.primaryGreen,
+        SnackBar(
+          content: Text('SOS cancelled successfully.\nReason: $reason'),
+          backgroundColor: AppColors.primaryGreen,
         ),
       );
 
       Navigator.pop(context);
     } catch (e) {
       debugPrint('');
-      debugPrint(
-        '================================',
-      );
-      debugPrint(
-        'FAILED TO CANCEL SOS',
-      );
-      debugPrint(
-        'SOS ID: ${widget.sosId}',
-      );
-      debugPrint(
-        'Error: $e',
-      );
-      debugPrint(
-        '================================',
-      );
+      debugPrint('================================');
+      debugPrint('FAILED TO CANCEL SOS');
+      debugPrint('SOS ID: ${widget.sosId}');
+      debugPrint('Error: $e');
+      debugPrint('================================');
       debugPrint('');
 
       if (!mounted) {
@@ -227,11 +192,8 @@ debugPrint(
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Failed to cancel SOS: $e',
-          ),
-          backgroundColor:
-              AppColors.dangerRed,
+          content: Text('Failed to cancel SOS: $e'),
+          backgroundColor: AppColors.dangerRed,
         ),
       );
     } finally {
@@ -241,6 +203,87 @@ debugPrint(
         });
       }
     }
+  }
+
+  // ============================================================
+  // CANCELLATION REASON DIALOG
+  // ============================================================
+
+  Future<String?> _showCancellationReasonDialog() async {
+    String? selectedReason;
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text(
+                'Cancel SOS',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Why are you cancelling the SOS?'),
+                  ),
+                  const SizedBox(height: 12),
+
+                  RadioListTile<String>(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Issue resolved'),
+                    value: 'Issue resolved',
+                    groupValue: selectedReason,
+                    onChanged: (value) {
+                      setDialogState(() {
+                        selectedReason = value;
+                      });
+                    },
+                  ),
+
+                  RadioListTile<String>(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('False alarm'),
+                    value: 'False alarm',
+                    groupValue: selectedReason,
+                    onChanged: (value) {
+                      setDialogState(() {
+                        selectedReason = value;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('Keep SOS Active'),
+                ),
+                ElevatedButton(
+                  onPressed: selectedReason == null
+                      ? null
+                      : () {
+                          Navigator.pop(dialogContext, selectedReason);
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.dangerRed,
+                  ),
+                  child: const Text(
+                    'Cancel SOS',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -270,11 +313,7 @@ debugPrint(
                 color: AppColors.dangerRed,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.check,
-                color: Colors.white,
-                size: 44,
-              ),
+              child: const Icon(Icons.check, color: Colors.white, size: 44),
             ),
 
             const SizedBox(height: 20),
@@ -293,13 +332,11 @@ debugPrint(
             Text(
               _isOfflineSos
                   ? 'Your emergency alert has been '
-                      'sent to nearby devices.'
+                        'sent to nearby devices.'
                   : 'Your emergency alert\n'
-                      'is being sent...',
+                        'is being sent...',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textGrey,
-              ),
+              style: const TextStyle(color: AppColors.textGrey),
             ),
 
             const SizedBox(height: 28),
@@ -319,9 +356,9 @@ debugPrint(
                   : 'Emergency Alert Active',
               subtitle: _isOfflineSos
                   ? 'Your SOS has been broadcast '
-                      'to nearby devices'
+                        'to nearby devices'
                   : 'Your SOS request has been '
-                      'recorded',
+                        'recorded',
             ),
 
             const SizedBox(height: 14),
@@ -332,10 +369,10 @@ debugPrint(
                   : 'Help is on the way',
               subtitle: _isOfflineSos
                   ? '${_meshService.nearbyNodeCount} '
-                      'nearby device(s) connected '
-                      'to the mesh'
+                        'nearby device(s) connected '
+                        'to the mesh'
                   : 'Stay calm and wait for '
-                      'assistance.',
+                        'assistance.',
             ),
 
             const Spacer(),
@@ -343,39 +380,23 @@ debugPrint(
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: _isCancelling
-                    ? null
-                    : _cancelSos,
-                style:
-                    OutlinedButton.styleFrom(
-                  minimumSize:
-                      const Size.fromHeight(52),
-                  side: const BorderSide(
-                    color: AppColors.dangerRed,
-                  ),
-                  shape:
-                      RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(12),
+                onPressed: _isCancelling ? null : _cancelSos,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  side: const BorderSide(color: AppColors.dangerRed),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 child: _isCancelling
                     ? const SizedBox(
                         width: 22,
                         height: 22,
-                        child:
-                            CircularProgressIndicator(
-                          strokeWidth: 2,
-                        ),
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : Text(
-                        _isOfflineSos
-                            ? 'Cancel Offline SOS'
-                            : 'Cancel SOS',
-                        style: const TextStyle(
-                          color:
-                              AppColors.dangerRed,
-                        ),
+                        _isOfflineSos ? 'Cancel Offline SOS' : 'Cancel SOS',
+                        style: const TextStyle(color: AppColors.dangerRed),
                       ),
               ),
             ),
@@ -391,45 +412,26 @@ class _StatusRow extends StatelessWidget {
 
   final String subtitle;
 
-  const _StatusRow({
-    required this.title,
-    required this.subtitle,
-  });
+  const _StatusRow({required this.title, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(
-          Icons.check_circle,
-          color: AppColors.primaryGreen,
-          size: 20,
-        ),
+        const Icon(Icons.check_circle, color: AppColors.primaryGreen, size: 20),
 
         const SizedBox(width: 10),
 
         Expanded(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight:
-                      FontWeight.w600,
-                ),
-              ),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
 
               Text(
                 subtitle,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color:
-                      AppColors.textGrey,
-                ),
+                style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
               ),
             ],
           ),
