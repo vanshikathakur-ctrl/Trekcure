@@ -909,7 +909,71 @@ def verify_digital_id(
     if current_hash == stored_hash:
 
         print(
-            "DIGITAL ID VERIFIED SUCCESSFULLY"
+        "DIGITAL ID VERIFIED SUCCESSFULLY"
+    )
+
+    # ========================================================
+    # 5. GET TOURIST MEDICAL INFORMATION
+    # ========================================================
+
+    try:
+
+        medical_result = (
+
+            supabase
+
+            .table(
+                "medical_information"
+            )
+
+            .select(
+                "blood_group, "
+                "medical_conditions, "
+                "allergies, "
+                "current_medications, "
+                "emergency_notes"
+            )
+
+            .eq(
+                "user_id",
+                data.user_id
+            )
+
+            .maybe_single()
+
+            .execute()
+
+        )
+
+    except Exception as e:
+
+        print(
+            "MEDICAL INFORMATION LOOKUP ERROR:"
+        )
+
+        print(
+            str(e)
+        )
+
+        raise HTTPException(
+
+            status_code=500,
+
+            detail=(
+                "Could not retrieve medical information: "
+                f"{str(e)}"
+            ),
+
+        )
+
+    # ========================================================
+    # 6. RETURN VERIFIED ID + MEDICAL INFORMATION
+    # ========================================================
+
+    if not medical_result.data:
+
+        print(
+            "NO MEDICAL INFORMATION AVAILABLE"
         )
 
         return {
@@ -920,7 +984,60 @@ def verify_digital_id(
             "message":
                 "Tourist identity verified",
 
+            "medical_information_available":
+                False,
+
+            "medical_information":
+                None,
+
         }
+
+    print(
+        "MEDICAL INFORMATION FOUND"
+    )
+
+    return {
+
+        "verified":
+            True,
+
+        "message":
+            "Tourist identity verified",
+
+        "medical_information_available":
+            True,
+
+        "medical_information":
+            {
+
+                "blood_group":
+                    medical_result.data.get(
+                        "blood_group"
+                    ),
+
+                "medical_conditions":
+                    medical_result.data.get(
+                        "medical_conditions"
+                    ),
+
+                "allergies":
+                    medical_result.data.get(
+                        "allergies"
+                    ),
+
+                "current_medications":
+                    medical_result.data.get(
+                        "current_medications"
+                    ),
+
+                "emergency_notes":
+                    medical_result.data.get(
+                        "emergency_notes"
+                    ),
+
+            },
+
+    }
 
     print(
         "DIGITAL ID VERIFICATION FAILED"
