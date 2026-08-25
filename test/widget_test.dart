@@ -7,23 +7,24 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import 'package:trekcure/main.dart';
 
 void main() {
-  testWidgets('TrekCure app loads successfully', (WidgetTester tester) async {
-    // Build our TrekCure app and trigger a frame.
+  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+    // Build our app and trigger a frame.
     await tester.pumpWidget(const TrekCureApp());
 
-    // Verify that the TrekCure app exists in the widget tree.
-    expect(find.byType(TrekCureApp), findsOneWidget);
+    // Verify that our counter starts at 0.
+    expect(find.text('0'), findsOneWidget);
+    expect(find.text('1'), findsNothing);
 
-    // Verify that the MaterialApp is present.
-    expect(find.byType(MaterialApp), findsOneWidget);
-
-    // Allow animations and the splash screen to proceed.
+    // Tap the '+' icon and trigger a frame.
+    await tester.tap(find.byIcon(Icons.add));
     await tester.pump();
 
-    // Verify that the app is still running.
-    expect(find.byType(TrekCureApp), findsOneWidget);
+    // Verify that our counter has incremented.
+    expect(find.text('0'), findsNothing);
+    expect(find.text('1'), findsOneWidget);
   });
 }
