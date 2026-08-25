@@ -1,8 +1,6 @@
 {
   "python-envs.defaultEnvManager": "ms-python.python:system",
 
-  "deno.enable": true,
-
   "deno.enablePaths": [
     "supabase/functions"
   ],
@@ -28,4 +26,4 @@
   "[typescript]": {
     "editor.defaultFormatter": "denoland.vscode-deno"
   }
-}                                     
+}

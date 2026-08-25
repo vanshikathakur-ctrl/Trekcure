@@ -3,15 +3,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/app_theme.dart';
 
-class MedicalInformationScreen extends StatefulWidget {
-  const MedicalInformationScreen({super.key});
+class MedicalInformationProfileScreen extends StatefulWidget {
+  const MedicalInformationProfileScreen({super.key});
 
   @override
-  State<MedicalInformationScreen> createState() =>
+  State<MedicalInformationProfileScreen> createState() =>
       _MedicalInformationScreenState();
 }
 
-class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
+class _MedicalInformationScreenState
+    extends State<MedicalInformationProfileScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   // ============================================================
@@ -81,12 +82,16 @@ class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
   Future<void> _loadMedicalInformation() async {
     final user = _supabase.auth.currentUser;
 
+    debugPrint('MEDICAL INFO: Current user = ${user?.id}');
+
     if (user == null) {
       if (!mounted) return;
 
       setState(() {
         _loading = false;
       });
+
+      _message('You are not logged in.', isError: true);
 
       return;
     }
@@ -100,6 +105,8 @@ class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
           )
           .eq('user_id', user.id)
           .maybeSingle();
+
+      debugPrint('MEDICAL INFO LOAD RESPONSE: $response');
 
       if (response != null) {
         _bloodGroup = response['blood_group']?.toString();
@@ -129,8 +136,12 @@ class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
       setState(() {
         _loading = false;
       });
-    } catch (e) {
-      debugPrint('MEDICAL INFORMATION LOAD ERROR: $e');
+    } catch (e, stackTrace) {
+      debugPrint('==================================================');
+      debugPrint('MEDICAL INFORMATION LOAD ERROR');
+      debugPrint('$e');
+      debugPrint('$stackTrace');
+      debugPrint('==================================================');
 
       if (!mounted) return;
 
@@ -138,7 +149,7 @@ class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
         _loading = false;
       });
 
-      _message('Could not load medical information.', isError: true);
+      _message('Could not load medical information: $e', isError: true);
     }
   }
 
@@ -149,15 +160,27 @@ class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
   Future<void> _saveMedicalInformation() async {
     final user = _supabase.auth.currentUser;
 
+    // ==========================================================
+    // CHECK LOGIN
+    // ==========================================================
+
     if (user == null) {
       _message('You are not logged in.', isError: true);
       return;
     }
 
+    // ==========================================================
+    // CHECK BLOOD GROUP
+    // ==========================================================
+
     if (_bloodGroup == null || _bloodGroup!.isEmpty) {
       _message('Please select your blood group.', isError: true);
       return;
     }
+
+    // ==========================================================
+    // PREVENT DOUBLE SAVE
+    // ==========================================================
 
     if (_saving) return;
 
@@ -166,6 +189,10 @@ class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
     });
 
     try {
+      // ========================================================
+      // PREPARE DATA
+      // ========================================================
+
       final conditions = _selectedConditions.join(', ');
 
       final data = {
@@ -177,9 +204,15 @@ class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
         'emergency_notes': _emergencyNotesController.text.trim(),
       };
 
-      // ==========================================================
-      // CHECK IF RECORD ALREADY EXISTS
-      // ==========================================================
+      debugPrint('==================================================');
+      debugPrint('MEDICAL INFORMATION SAVE');
+      debugPrint('User ID: ${user.id}');
+      debugPrint('Data: $data');
+      debugPrint('==================================================');
+
+      // ========================================================
+      // CHECK EXISTING RECORD
+      // ========================================================
 
       final existing = await _supabase
           .from('medical_information')
@@ -187,12 +220,16 @@ class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
           .eq('user_id', user.id)
           .maybeSingle();
 
-      // ==========================================================
+      debugPrint('EXISTING MEDICAL RECORD: $existing');
+
+      // ========================================================
       // UPDATE EXISTING RECORD
-      // ==========================================================
+      // ========================================================
 
       if (existing != null) {
-        await _supabase
+        debugPrint('MEDICAL INFO: Updating existing record...');
+
+        final updateResponse = await _supabase
             .from('medical_information')
             .update({
               'blood_group': _bloodGroup,
@@ -201,14 +238,28 @@ class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
               'medical_conditions': conditions,
               'emergency_notes': _emergencyNotesController.text.trim(),
             })
-            .eq('user_id', user.id);
+            .eq('user_id', user.id)
+            .select();
+
+        debugPrint('MEDICAL INFO UPDATE RESPONSE: $updateResponse');
       }
-      // ==========================================================
+      // ========================================================
       // INSERT NEW RECORD
-      // ==========================================================
+      // ========================================================
       else {
-        await _supabase.from('medical_information').insert(data);
+        debugPrint('MEDICAL INFO: Creating new record...');
+
+        final insertResponse = await _supabase
+            .from('medical_information')
+            .insert(data)
+            .select();
+
+        debugPrint('MEDICAL INFO INSERT RESPONSE: $insertResponse');
       }
+
+      // ========================================================
+      // SUCCESS
+      // ========================================================
 
       if (!mounted) return;
 
@@ -218,17 +269,23 @@ class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
 
       _message('Medical information saved successfully.');
 
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 700));
 
       if (!mounted) return;
 
-      // ==========================================================
-      // RETURN TO PROFILE / PREVIOUS SCREEN
-      // ==========================================================
-
       Navigator.of(context).pop(true);
-    } catch (e) {
-      debugPrint('MEDICAL INFORMATION SAVE ERROR: $e');
+    } catch (e, stackTrace) {
+      // ========================================================
+      // PRINT ACTUAL ERROR
+      // ========================================================
+
+      debugPrint('==================================================');
+      debugPrint('MEDICAL INFORMATION SAVE ERROR');
+      debugPrint('ERROR TYPE: ${e.runtimeType}');
+      debugPrint('ERROR: $e');
+      debugPrint('STACK TRACE:');
+      debugPrint('$stackTrace');
+      debugPrint('==================================================');
 
       if (!mounted) return;
 
@@ -236,7 +293,11 @@ class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
         _saving = false;
       });
 
-      _message('Could not save medical information.', isError: true);
+      // ========================================================
+      // SHOW ACTUAL ERROR
+      // ========================================================
+
+      _message('Save failed: $e', isError: true);
     }
   }
 
@@ -247,10 +308,13 @@ class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
   void _message(String message, {bool isError = false}) {
     if (!mounted) return;
 
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Text(message, maxLines: 5, overflow: TextOverflow.ellipsis),
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 5),
         backgroundColor: isError ? AppColors.dangerRed : AppColors.primaryGreen,
       ),
     );
@@ -358,15 +422,11 @@ class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
       canPop: true,
       onPopInvokedWithResult: (didPop, result) {
         // Android back button is intentionally allowed.
-        // No blocking logic here.
       },
       child: Scaffold(
         appBar: AppBar(
           automaticallyImplyLeading: true,
 
-          // ======================================================
-          // BACK BUTTON
-          // ======================================================
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, size: 25),
             onPressed: () {
@@ -380,9 +440,6 @@ class _MedicalInformationScreenState extends State<MedicalInformationScreen> {
           ),
         ),
 
-        // ========================================================
-        // BODY
-        // ========================================================
         body: _loading
             ? const Center(child: CircularProgressIndicator())
             : SafeArea(

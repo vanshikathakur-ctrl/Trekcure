@@ -123,7 +123,9 @@ class _WeatherScreenState extends State<WeatherScreen> {
           final Placemark place = placemarks.first;
 
           final String? city = place.locality;
+
           final String? state = place.administrativeArea;
+
           final String? country = place.country;
 
           final List<String> parts = [
@@ -141,7 +143,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
       }
 
       // ==========================================================
-      // 5. GET WEATHER FROM TREKCURE WEATHER API
+      // 5. GET WEATHER
       // ==========================================================
 
       final weather = await TrekCureApiService.getWeather(
@@ -166,7 +168,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
         _windSpeed = (weather['wind_speed'] ?? 0).toDouble();
 
-        _weatherCode = weather['weather_code'] ?? 0;
+        _weatherCode = (weather['weather_code'] ?? 0) as int;
 
         _riskLevel = weather['risk_level'] ?? '';
 
@@ -310,7 +312,6 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-
               children: [
                 const Text(
                   'Weather',
@@ -481,10 +482,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
         const SizedBox(height: 10),
 
         // ========================================================
-        // HOURLY FORECAST
+        // 6-HOUR FORECAST
         // ========================================================
         AppCard(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: EdgeInsets.zero,
 
           child: _forecast.isEmpty
               ? const Padding(
@@ -495,28 +496,51 @@ class _WeatherScreenState extends State<WeatherScreen> {
                     style: TextStyle(color: AppColors.textGrey),
                   ),
                 )
-              : Column(
-                  children: _forecast.map((f) {
-                    final int code = f['weather_code'] ?? 0;
+              : SizedBox(
+                  // Allows several forecast rows to be
+                  // visible while keeping the card compact.
+                  height: 220,
 
-                    final double temp = (f['temperature'] ?? 0).toDouble();
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
 
-                    final String time = _formatTime(f['time'] ?? '');
+                    itemCount: _forecast.length,
 
-                    return ListTile(
-                      leading: Icon(
-                        _weatherIcon(code),
-                        color: AppColors.infoBlue,
-                      ),
+                    separatorBuilder: (context, index) {
+                      return const Divider(
+                        height: 1,
+                        indent: 48,
+                        endIndent: 16,
+                      );
+                    },
 
-                      title: Text(time),
+                    itemBuilder: (context, index) {
+                      final Map<String, dynamic> forecast = _forecast[index];
 
-                      trailing: Text(
-                        '${temp.round()}°C',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    );
-                  }).toList(),
+                      final int code = (forecast['weather_code'] ?? 0) as int;
+
+                      final double temperature = (forecast['temperature'] ?? 0)
+                          .toDouble();
+
+                      final String time = _formatTime(forecast['time'] ?? '');
+
+                      return ListTile(
+                        dense: true,
+
+                        leading: Icon(
+                          _weatherIcon(code),
+                          color: AppColors.infoBlue,
+                        ),
+
+                        title: Text(time, style: const TextStyle(fontSize: 14)),
+
+                        trailing: Text(
+                          '${temperature.round()}°C',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      );
+                    },
+                  ),
                 ),
         ),
 
